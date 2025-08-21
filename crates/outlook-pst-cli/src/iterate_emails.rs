@@ -10,6 +10,7 @@ use outlook_pst::{
     *,
 };
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -388,6 +389,7 @@ fn process_message(
     stats: &mut ProcessingStats,
     action: &Action,
     csv_rows: Option<&mut Vec<Vec<String>>>,
+    seen_message_ids: &mut HashSet<String>,
 ) -> anyhow::Result<()> {
     let properties = message.properties();
     let mut text_out: Vec<String> = Vec::new();
@@ -401,6 +403,24 @@ fn process_message(
     let message_id = transport_headers.as_ref().and_then(|h| h.message_id.clone()).or_else(|| {
         properties.get(0x1035).and_then(|value| match value { PropertyValue::String8(s) => Some(s.to_string()), PropertyValue::Unicode(s) => Some(s.to_string()), _ => None })
     });
+    // Normalize Message-Id for duplicate detection: trim whitespace, strip surrounding <>, lowercase
+    let normalize_msg_id = |s: &str| -> String {
+        let s = s.trim();
+        let s = s.strip_prefix('<').unwrap_or(s);
+        let s = s.strip_suffix('>').unwrap_or(s);
+        s.trim().to_ascii_lowercase()
+    };
+    let mut is_duplicate = false;
+    if let Some(ref mid) = message_id {
+        let norm = normalize_msg_id(mid);
+        if !norm.is_empty() {
+            if seen_message_ids.contains(&norm) {
+                is_duplicate = true;
+            } else {
+                seen_message_ids.insert(norm);
+            }
+        }
+    }
     let from_display = if let Some(headers) = &transport_headers {
         if let Some(from_header) = &headers.from { from_header.clone() } else {
             let (sender_name, sender_email) = get_sender_info(&message);
@@ -643,7 +663,7 @@ fn process_message(
             }
         };
         let store_name = message.store().properties().display_name().unwrap_or_else(|_| "PST Store".to_string());
-        rows.push(vec![
+    let mut row = vec![
             format!("{}", idx),
             subject.clone(),
             received_time.clone(),
@@ -656,7 +676,10 @@ fn process_message(
             format!("{}", num_attachments),
             message_id.clone().unwrap_or_default(),
             store_name,
-        ]);
+    ];
+    // Append duplicate flag column
+    row.push(if is_duplicate { "true".to_string() } else { "false".to_string() });
+    rows.push(row);
     }
 
     // If dump, write HTML file now using the zero-based index convention from previous implementation
@@ -693,8 +716,11 @@ fn process_message(
         let body_html = body_html.unwrap_or_else(|| "<em>(no body)</em>".to_string());
     let idx = stats.total_messages - 1; // zero-based index
     let index_str = format!("{:05}", idx);
-    // Write to <out-dir>/<index_number>/message.html
+    // Write to default or duplicate directory per requirement
+    // default: <out-dir>/<index>/message.html
+    // duplicates: <out-dir>/duplicates/<index>/message.html
     let mut path = PathBuf::from(out_dir);
+    if is_duplicate { path.push("duplicates"); }
     path.push(&index_str);
     fs::create_dir_all(&path)?;
     path.push("message.html");
@@ -862,6 +888,7 @@ fn process_folder_recursive(
     stats: &mut ProcessingStats,
     action: &Action,
     mut csv_rows: Option<&mut Vec<Vec<String>>>,
+    seen_message_ids: &mut HashSet<String>,
 ) -> anyhow::Result<()> {
     stats.add_folder();
     if let Some(contents_table) = folder.contents_table() {
@@ -875,9 +902,9 @@ fn process_folder_recursive(
                     match UnicodeMessage::read(store.clone(), &entry_id, None) {
                         Ok(message) => {
                             let res = if let Some(rows) = &mut csv_rows {
-                                process_message(message, folder_path, stats, action, Some(*rows))
+                                process_message(message, folder_path, stats, action, Some(*rows), seen_message_ids)
                             } else {
-                                process_message(message, folder_path, stats, action, None)
+                                process_message(message, folder_path, stats, action, None, seen_message_ids)
                             };
                             if let Err(e) = res {
                                 eprintln!("Warning: Error processing message in folder '{}': {}", folder_path, e);
@@ -919,6 +946,7 @@ fn process_folder_recursive(
                                     stats,
                                     action,
                                     Some(*rows),
+                                    seen_message_ids,
                                 )
                             } else {
                                 process_folder_recursive(
@@ -928,6 +956,7 @@ fn process_folder_recursive(
                                     stats,
                                     action,
                                     None,
+                                    seen_message_ids,
                                 )
                             };
                             if let Err(e) = res { eprintln!("Warning: Error processing folder '{}': {}", subfolder_path, e); }
@@ -965,6 +994,7 @@ fn process_single_pst(
     stats: &mut ProcessingStats,
     action: &Action,
     csv_rows: Option<&mut Vec<Vec<String>>>,
+    seen_message_ids: &mut HashSet<String>,
 ) -> anyhow::Result<()> {
     println!("Opening PST file: {}", pst_path.display());
     println!();
@@ -975,7 +1005,7 @@ fn process_single_pst(
         let store_name = store.properties().display_name().unwrap_or_else(|_| "PST Store".to_string());
         println!("Processing emails from Unicode PST store: {}", store_name);
         println!();
-    process_folder_recursive(store, &root_folder, "", stats, action, csv_rows)?;
+    process_folder_recursive(store, &root_folder, "", stats, action, csv_rows, seen_message_ids)?;
     } else {
         println!("Failed to open as Unicode PST, trying ANSI format...");
         return Err(anyhow::anyhow!("ANSI PST support not implemented in this example yet"));
@@ -1001,6 +1031,7 @@ fn write_csv(path: &Path, rows: &[Vec<String>]) -> anyhow::Result<()> {
         "number-of-attachments",
         "MessageId",
         "pst-store-name",
+        "duplicate",
     ];
     for (i, col) in header.iter().enumerate() {
         if i > 0 { file.write_all(b",")?; }
@@ -1037,8 +1068,10 @@ fn run_internal_multi(input: &str, action: Action) -> anyhow::Result<()> {
         Action::Dump(a) if a.csv => Some(Vec::new()),
         _ => None,
     };
+    // Global MessageId set for the entire run
+    let mut seen_message_ids: HashSet<String> = HashSet::new();
     for f in files {
-        if let Err(e) = process_single_pst(&f, &mut stats, &action, csv_acc.as_mut().map(|v| v)) {
+        if let Err(e) = process_single_pst(&f, &mut stats, &action, csv_acc.as_mut().map(|v| v), &mut seen_message_ids) {
             eprintln!("Warning: Skipping PST '{}': {}", f.display(), e);
         }
     }

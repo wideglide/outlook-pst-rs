@@ -1,0 +1,19 @@
+[package]
+name = "outlook-pst-cli"
+description = "CLI utilities for reading Outlook PST files using outlook-pst"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/microsoft/outlook-pst-rs"
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+codepage-strings = { workspace = true }
+compressed-rtf = { workspace = true }
+htmlescape = "0.3"
+outlook-pst = { version = "1.1.0", path = "../pst" }
+chrono = { workspace = true }
+
+[package.metadata.release]
+release = false

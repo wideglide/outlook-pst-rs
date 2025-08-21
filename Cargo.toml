@@ -2,6 +2,7 @@
 members = [
     "crates/compressed-rtf",
     "crates/pst",
+    "crates/outlook-pst-cli",
 ]
 resolver = "2"
 
@@ -27,3 +28,4 @@ codepage-strings = "1"
 crossterm = "0.29"
 ratatui = "0.29"
 thiserror = "2"
+chrono = "0.4"

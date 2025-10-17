@@ -23,6 +23,17 @@ use crate::{
     AnsiPstFile, PstFile, PstFileLock, UnicodePstFile,
 };
 
+// Lightweight public attachment export structure (minimal fields needed by CLI)
+#[derive(Clone, Debug)]
+pub struct AttachmentExport {
+    pub name: Option<String>,       // PR_ATTACH_LONG_FILENAME / PR_ATTACH_FILENAME
+    pub method: i32,                // PR_ATTACH_METHOD
+    pub size: Option<i32>,          // PR_ATTACH_SIZE
+    pub content_id: Option<String>, // PR_ATTACH_CONTENT_ID
+    pub data: Option<Vec<u8>>,      // present for ByValue or Storage
+    pub is_inline: bool,            // heuristic based on flags/content-id
+}
+
 #[derive(Default, Debug)]
 pub struct MessageProperties {
     properties: BTreeMap<u16, PropertyValue>,
@@ -137,6 +148,9 @@ pub trait Message {
     fn properties(&self) -> &MessageProperties;
     fn recipient_table(&self) -> &Rc<dyn TableContext>;
     fn attachment_table(&self) -> Option<&Rc<dyn TableContext>>;
+    /// Enumerate attachments with basic metadata and in-memory data (for ByValue / Storage).
+    /// Embedded message attachments will have data=None (not expanded) for now.
+    fn attachments_export(&self) -> io::Result<Vec<AttachmentExport>>;
 }
 
 struct MessageInner<Pst>
@@ -275,6 +289,9 @@ where
                 .into_iter()
                 .filter(|(prop_id, _)| prop_ids.is_none_or(|ids| ids.contains(prop_id)))
                 .map(|(prop_id, record)| {
+                    let pid = prop_id;
+                    // Set thread-local context for improved MV error diagnostics
+                    crate::ltp::prop_context::set_current_property_context(pid, record.prop_type());
                     prop_context
                         .read_property(file, encoding, &block_btree, &mut page_cache, record)
                         .map(|value| (prop_id, value))
@@ -388,6 +405,10 @@ impl Message for UnicodeMessage {
     fn attachment_table(&self) -> Option<&Rc<dyn TableContext>> {
         self.inner.attachment_table.as_ref()
     }
+
+    fn attachments_export(&self) -> io::Result<Vec<AttachmentExport>> {
+        self.inner.attachments_export()
+    }
 }
 
 impl MessageReadWrite<UnicodePstFile> for UnicodeMessage {
@@ -447,6 +468,129 @@ impl Message for AnsiMessage {
 
     fn attachment_table(&self) -> Option<&Rc<dyn TableContext>> {
         self.inner.attachment_table.as_ref()
+    }
+
+    fn attachments_export(&self) -> io::Result<Vec<AttachmentExport>> {
+        self.inner.attachments_export()
+    }
+}
+
+impl<Pst> MessageInner<Pst>
+where
+    Pst: PstFile + PstFileLock<Pst>,
+    <Pst as PstFile>::BTreeKey: BTreePageKeyReadWrite,
+    <Pst as PstFile>::NodeBTreeEntry: NodeBTreeEntryReadWrite,
+    <Pst as PstFile>::NodeBTree: RootBTreeReadWrite,
+    <<Pst as PstFile>::NodeBTree as RootBTree>::IntermediatePage:
+        RootBTreeIntermediatePageReadWrite<
+            Pst,
+            <Pst as PstFile>::NodeBTreeEntry,
+            <<Pst as PstFile>::NodeBTree as RootBTree>::LeafPage,
+        >,
+    <<<Pst as PstFile>::NodeBTree as RootBTree>::IntermediatePage as BTreePage>::Entry:
+        BTreePageEntryReadWrite,
+    <<Pst as PstFile>::NodeBTree as RootBTree>::LeafPage: RootBTreeLeafPageReadWrite<Pst>,
+    <Pst as PstFile>::BlockBTreeEntry: BlockBTreeEntryReadWrite,
+    <Pst as PstFile>::BlockBTree: RootBTreeReadWrite,
+    <<Pst as PstFile>::BlockBTree as RootBTree>::Entry: BTreeEntryReadWrite,
+    <<Pst as PstFile>::BlockBTree as RootBTree>::IntermediatePage:
+        RootBTreeIntermediatePageReadWrite<
+            Pst,
+            <<Pst as PstFile>::BlockBTree as RootBTree>::Entry,
+            <<Pst as PstFile>::BlockBTree as RootBTree>::LeafPage,
+        >,
+    <<Pst as PstFile>::BlockBTree as RootBTree>::LeafPage:
+        RootBTreeLeafPageReadWrite<Pst> + BTreePageReadWrite,
+    <Pst as PstFile>::BlockTrailer: BlockTrailerReadWrite,
+    <Pst as PstFile>::SubNodeTreeBlockHeader: IntermediateTreeHeaderReadWrite,
+    <Pst as PstFile>::SubNodeTreeBlock: IntermediateTreeBlockReadWrite,
+    <<Pst as PstFile>::SubNodeTreeBlock as IntermediateTreeBlock>::Entry:
+        IntermediateTreeEntryReadWrite,
+    <Pst as PstFile>::SubNodeBlock: IntermediateTreeBlockReadWrite,
+    <<Pst as PstFile>::SubNodeBlock as IntermediateTreeBlock>::Entry:
+        IntermediateTreeEntryReadWrite,
+    <Pst as PstFile>::HeapNode: HeapNodeReadWrite<Pst>,
+    <Pst as PstFile>::PropertyTree: HeapTreeReadWrite<Pst>,
+    <Pst as PstFile>::TableContext: TableContextReadWrite<Pst>,
+    <Pst as PstFile>::PropertyContext: PropertyContextReadWrite<Pst>,
+    <Pst as PstFile>::Store: StoreReadWrite<Pst>,
+{
+    fn attachments_export(&self) -> io::Result<Vec<AttachmentExport>> {
+        use crate::messaging::attachment::AttachmentMethod;
+        let mut exports = Vec::new();
+        // Iterate sub_nodes for Attachment nodes
+        for (nid, entry) in &self.sub_nodes {
+            if let Ok(NodeIdType::Attachment) = nid.id_type() {
+                // Reconstruct btree entry
+                let node = <<Pst as PstFile>::NodeBTreeEntry as NodeBTreeEntryReadWrite>::new(
+                    entry.node(), entry.block(), entry.sub_node(), None);
+                // Distinguish unicode/ansi by store type via Pst associated types
+                // Attempt read Generic: this duplication is acceptable for concise API.
+                // Safe: pattern matches actual concrete store type
+                #[allow(unused_mut)]
+                let mut method_i32 = 0; // fallback if property missing
+                let mut name: Option<String> = None;
+                let mut long_name: Option<String> = None;
+                let mut cid: Option<String> = None;
+                let mut size: Option<i32> = None;
+                let mut flags: Option<i32> = None;
+                // Minimal property extraction using PropertyContext reading like in attachment.rs
+                let pst = self.store.pst();
+                let header = pst.header();
+                let root = header.root();
+                let mut file = pst.reader().lock().map_err(|_| MessagingError::FailedToLockFile)?;
+                let file = &mut *file;
+                let block_btree = <<Pst as PstFile>::BlockBTree as RootBTreeReadWrite>::read(file, *root.block_btree())?;
+                let mut page_cache = pst.block_cache();
+                let encoding = header.crypt_method();
+                let data = node.data();
+                let heap = <<Pst as PstFile>::HeapNode as HeapNodeReadWrite<Pst>>::read(
+                    file,
+                    &block_btree,
+                    &mut page_cache,
+                    encoding,
+                    data.search_key(),
+                )?;
+                let heap_header = heap.header()?;
+                let tree = <Pst as PstFile>::PropertyTree::new(heap, heap_header.user_root());
+                let prop_context = <Pst as PstFile>::PropertyContext::new(node, tree);
+                let props = prop_context.properties()?;
+                let mut attachment_method: Option<AttachmentMethod> = None;
+                for (prop_id, record) in &props {
+                    if *prop_id == 0x3705 || *prop_id == 0x3704 || *prop_id == 0x3707 || *prop_id == 0x370E || *prop_id == 0x0E20 || *prop_id == 0x3712 {
+                        let pid = *prop_id;
+                        crate::ltp::prop_context::set_current_property_context(pid, record.prop_type());
+                        if let Ok(value) = prop_context.read_property(file, encoding, &block_btree, &mut page_cache, *record) {
+                            match pid {
+                                0x3705 => if let PropertyValue::Integer32(v) = value { method_i32 = v; attachment_method = AttachmentMethod::try_from(v).ok(); },
+                                0x3704 => if let PropertyValue::String8(s) = value { name = Some(s.to_string()) } else if let PropertyValue::Unicode(u)=value { name=Some(u.to_string()) },
+                                0x3707 => if let PropertyValue::String8(s) = value { long_name = Some(s.to_string()) } else if let PropertyValue::Unicode(u)=value { long_name=Some(u.to_string()) },
+                                0x370E => if let PropertyValue::String8(s) = value { cid = Some(s.to_string()) } else if let PropertyValue::Unicode(u)=value { cid=Some(u.to_string()) },
+                                0x0E20 => if let PropertyValue::Integer32(v) = value { size = Some(v); },
+                                0x3712 => if let PropertyValue::Integer32(v) = value { flags = Some(v); },
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                // If ByValue or Storage, attempt to read data property 0x3701
+                let mut data: Option<Vec<u8>> = None;
+                if let Some(meth) = attachment_method {
+                    if matches!(meth, AttachmentMethod::ByValue | AttachmentMethod::Storage) {
+                        if let Some(record) = props.iter().find(|(id,_)| **id == 0x3701).map(|(_,r)| *r) {
+                            crate::ltp::prop_context::set_current_property_context(0x3701, record.prop_type());
+                            if let Ok(value) = prop_context.read_property(file, encoding, &block_btree, &mut page_cache, record) {
+                                if let PropertyValue::Binary(bv) = value { data = Some(bv.buffer().to_vec()); }
+                            }
+                        }
+                    }
+                }
+                let display_name = long_name.or(name);
+                let is_inline = flags.map(|f| (f & 0x00000004) != 0).unwrap_or(false) || cid.as_ref().map(|c| !c.is_empty()).unwrap_or(false);
+                exports.push(AttachmentExport { name: display_name, method: method_i32, size, content_id: cid, data, is_inline });
+            }
+        }
+        Ok(exports)
     }
 }
 

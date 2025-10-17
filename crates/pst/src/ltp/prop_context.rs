@@ -78,6 +78,16 @@ impl From<PropertyValueRecord> for u32 {
 
 pub type PropertyTreeRecordKey = u16;
 
+// Optional hook for improved diagnostics in other layers. Currently a no-op.
+// Called by messaging layer before reading certain properties to provide context
+// for error messages (e.g., multi-value parsing). Kept here to avoid linking
+// errors if downstream crates reference it, without introducing a hard dependency
+// on any logging facility.
+#[inline(always)]
+pub fn set_current_property_context(_prop_id: u16, _prop_type: PropertyType) {
+    // Intentionally empty
+}
+
 impl HeapTreeEntryKey for PropertyTreeRecordKey {
     const SIZE: u8 = 2;
 }

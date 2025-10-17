@@ -29,7 +29,7 @@ pub fn decode_rfc2047(s: &str) -> String {
                             let encoded_text = &s[data_start..term_pos];
                             if !enc_token.is_empty() {
                                 let decoded = if enc_token.eq_ignore_ascii_case("B") {
-                                    let cleaned = encoded_text.replace('\r', "").replace('\n', "");
+                                    let cleaned = encoded_text.replace(['\r', '\n'], "");
                                     general_purpose::STANDARD.decode(cleaned.as_bytes()).ok()
                                         .and_then(|raw| decode_bytes_charset(&raw, charset))
                                 } else if enc_token.eq_ignore_ascii_case("Q") {
@@ -90,8 +90,8 @@ fn decode_bytes_charset(data: &[u8], charset: &str) -> Option<String> {
 ///
 /// Behaviour:
 /// - String8: treat underlying bytes as the native code page already normalized by upstream
-///            property decoding (assume ASCII/Windows-1252 superset) and convert lossily to UTF-8.
-///            We DO NOT widen bytes to UTF-16 (previous implementation did and produced mojibake).
+///   property decoding (assume ASCII/Windows-1252 superset) and convert lossily to UTF-8.
+///   We DO NOT widen bytes to UTF-16 (previous implementation did and produced mojibake).
 /// - Unicode: underlying buffer is UTF-16; if first u16 == 0x0001 treat it as sentinel and skip it.
 pub fn decode_subject(value: &PropertyValue) -> Option<String> {
     match value {

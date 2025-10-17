@@ -960,7 +960,7 @@ pub fn collect_pst_files(input: &str) -> anyhow::Result<Vec<PathBuf>> {
             .filter_map(|e| e.ok())
             .map(|e| e.path())
             .filter(|p| p.is_file())
-            .filter(|p| p.extension().map(|e| e.to_ascii_lowercase() == "pst").unwrap_or(false))
+            .filter(|p| p.extension().map(|e| e.eq_ignore_ascii_case("pst")).unwrap_or(false))
             .collect();
         files.sort(); // deterministic order
         return Ok(files);
@@ -1048,7 +1048,7 @@ fn run_internal_multi(input: &str, action: Action) -> anyhow::Result<()> {
     // Global MessageId set for the entire run
     let mut seen_message_ids: HashSet<String> = HashSet::new();
     for f in files {
-        if let Err(e) = process_single_pst(&f, &mut stats, &action, csv_acc.as_mut().map(|v| v), &mut seen_message_ids) {
+        if let Err(e) = process_single_pst(&f, &mut stats, &action, csv_acc.as_mut(), &mut seen_message_ids) {
             eprintln!("Warning: Skipping PST '{}': {}", f.display(), e);
         }
     }

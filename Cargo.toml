@@ -1,5 +1,9 @@
 [workspace]
-members = ["crates/compressed-rtf", "crates/pst"]
+members = [
+    "crates/compressed-rtf",
+    "crates/pst",
+    "crates/outlook-pst-cli",
+]
 resolver = "2"
 
 [patch.crates-io]
@@ -26,3 +30,4 @@ ratatui = "0.29"
 thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = "0.3"
+chrono = "0.4"

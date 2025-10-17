@@ -3,7 +3,7 @@ name: Rust
 on:
   push:
     branches:
-      - main
+      - temp_cli
   pull_request:
     branches:
       - main
@@ -41,3 +41,33 @@ jobs:
 
       - name: Check clippy
         run: cargo clippy --verbose -- -D warnings
+
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - macos-15-intel
+          - windows-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        run: cargo build --release 
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: outlook-pst-cli-${{ matrix.os }}
+          path: |
+            target/release/outlook-pst-cli
+            target/release/outlook-pst-cli.exe

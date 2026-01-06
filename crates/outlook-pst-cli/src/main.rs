@@ -14,7 +14,11 @@ enum Command {
 }
 
 #[derive(Parser, Debug)]
-#[command(name = "outlook-pst-cli", version, about = "CLI utilities for Outlook PST files")] 
+#[command(
+    name = "outlook-pst-cli",
+    version,
+    about = "CLI utilities for Outlook PST files"
+)]
 struct Cli {
     #[command(subcommand)]
     cmd: Command,
@@ -23,7 +27,7 @@ struct Cli {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
-    Command::List(args) => iterate_emails::run_list(args),
-    Command::Dump(args) => iterate_emails::run_dump(args),
+        Command::List(args) => iterate_emails::run_list(args),
+        Command::Dump(args) => iterate_emails::run_dump(args),
     }
 }

@@ -60,4 +60,12 @@ pub struct DumpArgs {
     /// Comma-separated list of keywords; if any are found in the email body, list them as "Keywords"
     #[arg(long, value_delimiter = ',', value_name = "KEYWORDS")]
     pub keywords: Vec<String>,
+
+    /// Write message metadata (Subject, From, Date, To, Cc, Bcc, MessageId, Folder, Size, Flags, etc.) to metadata.txt
+    #[arg(long)]
+    pub metadata: bool,
+
+    /// Write transport headers (Received, X-Mailer, etc.) to headers.txt when available
+    #[arg(long)]
+    pub headers: bool,
 }

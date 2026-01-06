@@ -41,28 +41,35 @@ Required:
 
 Optional:
 - `--attachments` — save attachments in the same folder as `message.html`. Inline content-id attachments are saved using their content-id when available; other binary attachments are saved by filename.
+- `--metadata` — write message metadata (Subject, From, Date, To, Cc, Bcc, MessageId, Folder, Size, Flags, Responsive Emails, Keywords, Attachments) to `metadata.txt` in each message folder.
+- `--headers` — write transport headers (Message-ID, In-Reply-To, References, X-Mailer, X-Originating-IP, Return-Path, Received chain, etc.) to `headers.txt` in each message folder when available.
 - `--responsive-emails email1,email2` — mark as responsive if any participant matches.
 - `--keywords word1,word2` — report which keywords appear in the body.
 - `--csv` — also write `emails.csv` to `<OUT_DIR>`.
 
 Examples:
 - `outlook-pst-cli dump <path/to/file.pst> --out-dir out --attachments --csv`
-- `outlook-pst-cli dump <path/to/dir> --out-dir out`
+- `outlook-pst-cli dump <path/to/dir> --out-dir out --metadata --headers`
+- `outlook-pst-cli dump <path/to/file.pst> --out-dir out --attachments --metadata --headers --csv`
 
 ## CSV output
 
 When `--csv` is specified, a CSV summary of all processed emails is produced with columns:
 
-`index, subject, date, from, to, cc, size, number-of-responsive-emails, number-of-keywords, number-of-attachments, MessageId, pst-store-name`
+`index, subject, date, from, to, cc, size, number-of-responsive-emails, number-of-keywords, number-of-attachments, MessageId, pst-store-name, duplicate`
 
 - For `list`, the CSV is written to the current working directory as `emails.csv`.
 - For `dump`, the CSV is written to the specified output directory as `emails.csv`.
+- The `duplicate` column indicates whether a message has a duplicate Message-ID that was already processed.
 
 ## Output details (dump)
 
-- Body selection order: HTML body (if present) → plain text body (wrapped in `<pre>`) → decoded RTF (wrapped in `<pre>`).
-- The generated HTML includes a metadata table (Subject, From, Date, To/Cc/Bcc if present, Folder, Size, Flags, MessageId, and any responsive/keyword notes).
-- Attachments (when `--attachments` is used) are saved in the same folder as `message.html`.
+- **HTML body**: The HTML file includes only core headers in a metadata table: Subject, From, Date, To, Cc, Bcc, and Attachments (if present).
+- **Body selection order**: HTML body (if present) → plain text body (wrapped in `<pre>`) → decoded RTF (wrapped in `<pre>`).
+- **metadata.txt** (when `--metadata` is used): Contains all message metadata including Subject, From, Date, To, Cc, Bcc, MessageId, Folder, Size, Flags, Responsive Emails, Keywords, and Attachments.
+- **headers.txt** (when `--headers` is used): Contains transport headers like Message-ID, In-Reply-To, References, X-Mailer, X-Originating-IP, Return-Path, Received chain, and other X-headers. Only written if transport headers exist for the message.
+- **Attachments** (when `--attachments` is used): Saved in the same folder as `message.html`.
+- **Duplicate detection**: Messages with duplicate Message-IDs are written to `<OUT_DIR>/duplicates/<INDEX>/` instead of the main output directory.
 
 ## Processing summary
 
@@ -81,3 +88,5 @@ At the end of a run, a summary is printed with totals for folders, messages, siz
   - `cargo run -p outlook-pst-cli -- list crates/pst/Example-001.pst --show-headers --show-attachments --show-body-types`
 - Dump a sample PST with attachments and CSV:
   - `cargo run -p outlook-pst-cli -- dump crates/pst/Example-001.pst --out-dir target/email_html_out --attachments --csv`
+- Dump with metadata and transport headers:
+  - `cargo run -p outlook-pst-cli -- dump crates/pst/Example-001.pst --out-dir target/email_html_out --metadata --headers --attachments --csv`

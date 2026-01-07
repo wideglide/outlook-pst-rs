@@ -57,6 +57,14 @@ pub struct ExportArgs {
     #[arg(long)]
     pub attachments: bool,
 
+    /// Write message metadata (non-transport headers) into metadata.txt next to the HTML
+    #[arg(long)]
+    pub metadata: bool,
+
+    /// Write transport headers into headers.txt when present
+    #[arg(long)]
+    pub headers: bool,
+
     /// Also write a CSV summary of all emails to the root of the output directory
     #[arg(long)]
     pub csv: bool,

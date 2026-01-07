@@ -44,6 +44,8 @@ Optional:
 - `--responsive-emails email1,email2` — mark as responsive if any participant matches.
 - `--keywords word1,word2` — report which keywords appear in the body.
 - `--csv` — also write `emails.csv` to `<OUT_DIR>`.
+- `--metadata` — write non-transport metadata (Subject, From, Date, recipients, MessageId, Folder, Size, Attachments, Responsive Emails, Flags) to `metadata.txt` next to `message.html`.
+- `--headers` — when transport headers exist, write raw headers to `headers.txt` next to `message.html`.
 
 Examples:
 - `outlook-pst-cli export <path/to/file.pst> --out-dir out --attachments --csv`
@@ -53,7 +55,7 @@ Examples:
 
 When `--csv` is specified, a CSV summary of all processed emails is produced with columns:
 
-`index, subject, date, from, to, cc, size, number-of-responsive-emails, number-of-keywords, number-of-attachments, MessageId, pst-store-name`
+`index, subject, date, from, to, cc, size, number-of-responsive-emails, number-of-keywords, number-of-attachments, MessageId, pst-store-name, duplicate`
 
 - For `list`, the CSV is written to the current working directory as `emails.csv`.
 - For `export`, the CSV is written to the specified output directory as `emails.csv`.
@@ -61,7 +63,8 @@ When `--csv` is specified, a CSV summary of all processed emails is produced wit
 ## Output details (export)
 
 - Body selection order: HTML body (if present) → plain text body (wrapped in `<pre>`) → decoded RTF (wrapped in `<pre>`).
-- The generated HTML includes a metadata table (Subject, From, Date, To/Cc/Bcc if present, Folder, Size, Flags, MessageId, and any responsive/keyword notes).
+- The generated HTML includes a slim metadata table: Subject, From, Date, and To/Cc/Bcc (when present). Other metadata is available via `metadata.txt` when `--metadata` is used.
+- When requested, `metadata.txt` captures key non-transport fields; `headers.txt` captures raw transport headers if present.
 - Attachments (when `--attachments` is used) are saved in the same folder as `message.html`.
 
 ## Processing summary

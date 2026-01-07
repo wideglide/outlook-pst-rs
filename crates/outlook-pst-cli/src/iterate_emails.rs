@@ -993,6 +993,7 @@ fn write_metadata_file(dir: &Path, fields: &[(String, String)]) -> anyhow::Resul
         "Size",
         "Attachments",
         "Responsive Emails",
+        "Keywords",
         "Flags",
     ];
     let mut file = fs::File::create(dir.join("metadata.txt"))?;

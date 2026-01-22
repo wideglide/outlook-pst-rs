@@ -579,8 +579,8 @@ where
                     if matches!(meth, AttachmentMethod::ByValue | AttachmentMethod::Storage) {
                         if let Some(record) = props.iter().find(|(id,_)| **id == 0x3701).map(|(_,r)| *r) {
                             crate::ltp::prop_context::set_current_property_context(0x3701, record.prop_type());
-                            if let Ok(value) = prop_context.read_property(file, encoding, &block_btree, &mut page_cache, record) {
-                                if let PropertyValue::Binary(bv) = value { data = Some(bv.buffer().to_vec()); }
+                            if let Ok(PropertyValue::Binary(bv)) = prop_context.read_property(file, encoding, &block_btree, &mut page_cache, record) {
+                                data = Some(bv.buffer().to_vec());
                             }
                         }
                     }

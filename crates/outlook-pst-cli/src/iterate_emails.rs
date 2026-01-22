@@ -1378,10 +1378,7 @@ fn process_folder_recursive(
                             && e.to_string().contains("Missing NID_TYPE_RECIPIENT_TABLE")
                         {
                             // Try to dump a few key properties from the contents table row
-                            let columns = match row.columns(info) {
-                                Ok(c) => c,
-                                Err(_) => Vec::new(),
-                            };
+                            let columns = row.columns(info).unwrap_or_default();
                             let get_col = |pid: u16| -> Option<
                                 outlook_pst::ltp::prop_context::PropertyValue,
                             > {

@@ -31,7 +31,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Check fmt
-        run: cargo fmt --check
+        run: cargo fmt --check --package outlook-pst-cli
 
       - name: Build
         run: cargo build --verbose

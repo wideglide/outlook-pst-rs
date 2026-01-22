@@ -15,7 +15,6 @@ use crate::args;
 use crate::encoding;
 use chrono::{TimeZone, Utc};
 
-
 trait PropertyValueExt {
     fn as_string(&self) -> Option<String>;
     fn as_i32(&self) -> Option<i32>;
@@ -33,11 +32,17 @@ impl PropertyValueExt for PropertyValue {
     }
 
     fn as_i32(&self) -> Option<i32> {
-        match self { PropertyValue::Integer32(v) => Some(*v), _ => None }
+        match self {
+            PropertyValue::Integer32(v) => Some(*v),
+            _ => None,
+        }
     }
 
     fn as_time(&self) -> Option<i64> {
-        match self { PropertyValue::Time(v) => Some(*v), _ => None }
+        match self {
+            PropertyValue::Time(v) => Some(*v),
+            _ => None,
+        }
     }
 
     fn as_bool(&self) -> Option<bool> {
@@ -49,13 +54,11 @@ impl PropertyValueExt for PropertyValue {
     }
 }
 
-
 // Distinguish behavior between console listing and HTML exporting
 enum Action<'a> {
     List(&'a args::ListArgs),
     Export(&'a args::ExportArgs),
 }
-
 
 #[derive(Default, Debug)]
 pub struct TransportHeaders {
@@ -98,16 +101,25 @@ impl ProcessingStats {
         }
         self.total_size_bytes += size_bytes as u64;
     }
-    fn add_folder(&mut self) { self.total_folders += 1; }
-    fn add_error(&mut self) { self.processing_errors += 1; }
+    fn add_folder(&mut self) {
+        self.total_folders += 1;
+    }
+    fn add_error(&mut self) {
+        self.processing_errors += 1;
+    }
     fn print_summary(&self) {
         println!("\n{}", "=".repeat(80));
         println!("PROCESSING SUMMARY");
         println!("{}", "=".repeat(80));
         println!("Total folders processed: {}", self.total_folders);
         println!("Total messages processed: {}", self.total_messages);
-        println!("Messages with attachments: {}", self.messages_with_attachments);
-        if self.processing_errors > 0 { println!("Messages skipped due to errors: {}", self.processing_errors); }
+        println!(
+            "Messages with attachments: {}",
+            self.messages_with_attachments
+        );
+        if self.processing_errors > 0 {
+            println!("Messages skipped due to errors: {}", self.processing_errors);
+        }
         println!(
             "Total size: {} bytes ({:.2} MB)",
             self.total_size_bytes,
@@ -116,7 +128,8 @@ impl ProcessingStats {
         if self.total_messages > 0 {
             let avg_size = self.total_size_bytes as f64 / self.total_messages as f64;
             println!("Average message size: {:.2} bytes", avg_size);
-            let attachment_percentage = (self.messages_with_attachments as f64 / self.total_messages as f64) * 100.0;
+            let attachment_percentage =
+                (self.messages_with_attachments as f64 / self.total_messages as f64) * 100.0;
             println!("Messages with attachments: {:.1}%", attachment_percentage);
         }
         println!("{}", "=".repeat(80));
@@ -130,15 +143,13 @@ fn filetime_to_datetime(filetime: i64) -> String {
     const WINDOWS_TO_UNIX_EPOCH_SECS: i64 = 11_644_473_600; // seconds between 1601 and 1970
     let secs = (filetime / 10_000_000).saturating_sub(WINDOWS_TO_UNIX_EPOCH_SECS);
     let nanos = (filetime % 10_000_000).rem_euclid(10_000_000) as u32 * 100; // 100ns -> ns
-    Utc
-        .timestamp_opt(secs, nanos)
+    Utc.timestamp_opt(secs, nanos)
         .single()
         .map(|dt| dt.format("%Y-%m-%d %H:%M:%S UTC").to_string())
         .unwrap_or_else(|| "Invalid Date".to_string())
 }
 
 // (date helpers removed; no longer used for filename generation)
-
 
 /// Parses raw transport headers into a structured `TransportHeaders` record.
 pub fn parse_transport_headers(headers_text: &str) -> TransportHeaders {
@@ -148,7 +159,10 @@ pub fn parse_transport_headers(headers_text: &str) -> TransportHeaders {
     let mut in_header = false;
     for line in headers_text.lines() {
         if line.starts_with(' ') || line.starts_with('\t') {
-            if in_header { current_header_value.push(' '); current_header_value.push_str(line.trim()); }
+            if in_header {
+                current_header_value.push(' ');
+                current_header_value.push_str(line.trim());
+            }
         } else if let Some(colon_pos) = line.find(':') {
             if in_header && !current_header_name.is_empty() {
                 process_header(&mut headers, &current_header_name, &current_header_value);
@@ -181,10 +195,16 @@ fn process_header(headers: &mut TransportHeaders, name: &str, value: &str) {
         "return-path" => headers.return_path = Some(value.to_string()),
         "received" => headers.received_chain.push(value.to_string()),
         _ => {
-            if name.starts_with("x-") || name.contains("spam") || name.contains("virus")
-                || name == "authentication-results" || name == "dkim-signature"
-                || name == "arc-authentication-results" {
-                headers.other_headers.insert(name.to_string(), value.to_string());
+            if name.starts_with("x-")
+                || name.contains("spam")
+                || name.contains("virus")
+                || name == "authentication-results"
+                || name == "dkim-signature"
+                || name == "arc-authentication-results"
+            {
+                headers
+                    .other_headers
+                    .insert(name.to_string(), value.to_string());
             }
         }
     }
@@ -195,10 +215,26 @@ fn format_mailbox(display_name: Option<String>, email: Option<String>) -> String
     match (display_name, email) {
         (Some(name), Some(email)) => {
             let clean_name = clean_exchange_dn(&name);
-            if clean_name == email { email } else { format!("{} <{}>", clean_name, email) }
+            if clean_name == email {
+                email
+            } else {
+                format!("{} <{}>", clean_name, email)
+            }
         }
-        (Some(name), None) => { if name.contains('@') { name } else { clean_exchange_dn(&name) } }
-        (None, Some(email)) => { if email.contains('@') { email } else { clean_exchange_dn(&email) } }
+        (Some(name), None) => {
+            if name.contains('@') {
+                name
+            } else {
+                clean_exchange_dn(&name)
+            }
+        }
+        (None, Some(email)) => {
+            if email.contains('@') {
+                email
+            } else {
+                clean_exchange_dn(&email)
+            }
+        }
         (None, None) => "Unknown".to_string(),
     }
 }
@@ -211,8 +247,14 @@ fn clean_exchange_dn(name: &str) -> String {
             .map(|part| {
                 if part.contains("-") && part.len() > 40 {
                     let parts: Vec<&str> = part.split("-").collect();
-                    if parts.len() > 1 && parts[0].len() > 3 { parts[0].to_string() } else { part.to_string() }
-                } else { part.to_string() }
+                    if parts.len() > 1 && parts[0].len() > 3 {
+                        parts[0].to_string()
+                    } else {
+                        part.to_string()
+                    }
+                } else {
+                    part.to_string()
+                }
             })
             .unwrap_or_else(|| "Exchange User".to_string())
     } else if name == "Unknown Sender" || name.is_empty() {
@@ -226,8 +268,13 @@ fn clean_exchange_dn(name: &str) -> String {
 fn get_sender_info(message: &dyn Message) -> (String, String) {
     let properties = message.properties();
     let get_str = |pid: u16| -> Option<String> { properties.get(pid).and_then(|v| v.as_string()) };
-    let is_email_like = |s: &str| -> bool { let t = s.trim(); t.contains('@') && !t.starts_with("/O=") };
-    let sender_name = get_str(0x0042).or_else(|| get_str(0x0C1A)).unwrap_or_default();
+    let is_email_like = |s: &str| -> bool {
+        let t = s.trim();
+        t.contains('@') && !t.starts_with("/O=")
+    };
+    let sender_name = get_str(0x0042)
+        .or_else(|| get_str(0x0C1A))
+        .unwrap_or_default();
     let sender_addrtype = get_str(0x0C1E).map(|s| s.to_uppercase());
     let repr_addrtype = get_str(0x0064).map(|s| s.to_uppercase());
     let sender_smtp = get_str(0x5D01);
@@ -236,19 +283,44 @@ fn get_sender_info(message: &dyn Message) -> (String, String) {
     let repr_addr = get_str(0x0065);
     let orig_sender_addr = get_str(0x0067);
     let creator_smtp = get_str(0x5D0A);
-    let best_email = sender_smtp.as_ref().filter(|s| is_email_like(s)).cloned()
+    let best_email = sender_smtp
+        .as_ref()
+        .filter(|s| is_email_like(s))
+        .cloned()
         .or_else(|| repr_smtp.as_ref().filter(|s| is_email_like(s)).cloned())
-        .or_else(|| match (sender_addrtype.as_deref(), sender_addr.as_ref()) { (Some("SMTP"), Some(val)) if is_email_like(val) => Some(val.clone()), _ => None })
-        .or_else(|| match (repr_addrtype.as_deref(), repr_addr.as_ref()) { (Some("SMTP"), Some(val)) if is_email_like(val) => Some(val.clone()), _ => None })
+        .or_else(
+            || match (sender_addrtype.as_deref(), sender_addr.as_ref()) {
+                (Some("SMTP"), Some(val)) if is_email_like(val) => Some(val.clone()),
+                _ => None,
+            },
+        )
+        .or_else(|| match (repr_addrtype.as_deref(), repr_addr.as_ref()) {
+            (Some("SMTP"), Some(val)) if is_email_like(val) => Some(val.clone()),
+            _ => None,
+        })
         .or_else(|| sender_addr.as_ref().filter(|s| is_email_like(s)).cloned())
         .or_else(|| repr_addr.as_ref().filter(|s| is_email_like(s)).cloned())
-        .or_else(|| orig_sender_addr.as_ref().filter(|s| is_email_like(s)).cloned())
+        .or_else(|| {
+            orig_sender_addr
+                .as_ref()
+                .filter(|s| is_email_like(s))
+                .cloned()
+        })
         .or_else(|| creator_smtp.as_ref().filter(|s| is_email_like(s)).cloned());
-    if let Some(email) = best_email { (sender_name, email) } else {
+    if let Some(email) = best_email {
+        (sender_name, email)
+    } else {
         let cleaned_display = if sender_name.trim().is_empty() {
-            sender_smtp.or(repr_smtp).or(sender_addr).or(repr_addr).or(orig_sender_addr)
-                .map(|raw| clean_exchange_dn(&raw)).unwrap_or_default()
-        } else { sender_name };
+            sender_smtp
+                .or(repr_smtp)
+                .or(sender_addr)
+                .or(repr_addr)
+                .or(orig_sender_addr)
+                .map(|raw| clean_exchange_dn(&raw))
+                .unwrap_or_default()
+        } else {
+            sender_name
+        };
         (cleaned_display, String::new())
     }
 }
@@ -261,7 +333,10 @@ fn get_recipients(message: &dyn Message) -> (Vec<String>, Vec<String>, Vec<Strin
     let mut cc_recipients = Vec::new();
     let mut bcc_recipients = Vec::new();
     for row in rt.rows_matrix() {
-        let columns = match row.columns(info) { Ok(c) => c, Err(_) => continue };
+        let columns = match row.columns(info) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
         let mut recipient_type: Option<i32> = None;
         let mut display_name: Option<String> = None;
         let mut smtp_address: Option<String> = None;
@@ -269,17 +344,29 @@ fn get_recipients(message: &dyn Message) -> (Vec<String>, Vec<String>, Vec<Strin
         for (col_def, value) in info.columns().iter().zip(columns) {
             if let Some(valref) = value.as_ref() {
                 match col_def.prop_id() {
-                    0x0C15 => { // PR_RECIPIENT_TYPE
-                        if let Ok(pv) = rt.read_column(valref, col_def.prop_type()) { recipient_type = pv.as_i32(); }
+                    0x0C15 => {
+                        // PR_RECIPIENT_TYPE
+                        if let Ok(pv) = rt.read_column(valref, col_def.prop_type()) {
+                            recipient_type = pv.as_i32();
+                        }
                     }
-                    0x3001 => { // PR_DISPLAY_NAME
-                        if let Ok(pv) = rt.read_column(valref, col_def.prop_type()) { display_name = pv.as_string(); }
+                    0x3001 => {
+                        // PR_DISPLAY_NAME
+                        if let Ok(pv) = rt.read_column(valref, col_def.prop_type()) {
+                            display_name = pv.as_string();
+                        }
                     }
-                    0x39FE => { // PR_SMTP_ADDRESS
-                        if let Ok(pv) = rt.read_column(valref, col_def.prop_type()) { smtp_address = pv.as_string(); }
+                    0x39FE => {
+                        // PR_SMTP_ADDRESS
+                        if let Ok(pv) = rt.read_column(valref, col_def.prop_type()) {
+                            smtp_address = pv.as_string();
+                        }
                     }
-                    0x3003 => { // PR_EMAIL_ADDRESS
-                        if let Ok(pv) = rt.read_column(valref, col_def.prop_type()) { pr_email_address = pv.as_string(); }
+                    0x3003 => {
+                        // PR_EMAIL_ADDRESS
+                        if let Ok(pv) = rt.read_column(valref, col_def.prop_type()) {
+                            pr_email_address = pv.as_string();
+                        }
                     }
                     _ => {}
                 }
@@ -292,7 +379,12 @@ fn get_recipients(message: &dyn Message) -> (Vec<String>, Vec<String>, Vec<Strin
         };
         if let Some(rt_val) = recipient_type {
             let formatted = format_mailbox(display_name, email_address);
-            match rt_val { 1 => to_recipients.push(formatted), 2 => cc_recipients.push(formatted), 3 => bcc_recipients.push(formatted), _ => {} }
+            match rt_val {
+                1 => to_recipients.push(formatted),
+                2 => cc_recipients.push(formatted),
+                3 => bcc_recipients.push(formatted),
+                _ => {}
+            }
         }
     }
     (to_recipients, cc_recipients, bcc_recipients)
@@ -312,41 +404,73 @@ fn get_transport_headers(message: &dyn Message) -> Option<TransportHeaderData> {
 
 /// Splits a header recipient string into individual entries, respecting quoted names.
 pub fn parse_recipients_from_header(header_value: &str) -> Vec<String> {
-    if header_value.trim().is_empty() { return Vec::new(); }
+    if header_value.trim().is_empty() {
+        return Vec::new();
+    }
     let mut recipients = Vec::new();
     let mut current_recipient = String::new();
     let mut in_quoted_name = false;
     let mut bracket_depth = 0;
     for ch in header_value.chars() {
         match ch {
-            '"' => { in_quoted_name = !in_quoted_name; current_recipient.push(ch); }
-            '<' if !in_quoted_name => { bracket_depth += 1; current_recipient.push(ch); }
-            '>' if !in_quoted_name => { bracket_depth -= 1; current_recipient.push(ch); }
+            '"' => {
+                in_quoted_name = !in_quoted_name;
+                current_recipient.push(ch);
+            }
+            '<' if !in_quoted_name => {
+                bracket_depth += 1;
+                current_recipient.push(ch);
+            }
+            '>' if !in_quoted_name => {
+                bracket_depth -= 1;
+                current_recipient.push(ch);
+            }
             ',' if !in_quoted_name && bracket_depth == 0 => {
                 let recipient = current_recipient.trim();
-                if !recipient.is_empty() { recipients.push(recipient.to_string()); }
+                if !recipient.is_empty() {
+                    recipients.push(recipient.to_string());
+                }
                 current_recipient.clear();
             }
             _ => current_recipient.push(ch),
         }
     }
     let recipient = current_recipient.trim();
-    if !recipient.is_empty() { recipients.push(recipient.to_string()); }
+    if !recipient.is_empty() {
+        recipients.push(recipient.to_string());
+    }
     recipients
 }
 
 /// Builds (To, Cc, Bcc) recipient lists from parsed transport headers.
-fn recipient_lists_from_headers(headers: &TransportHeaders) -> (Vec<String>, Vec<String>, Vec<String>) {
-    let to_list = headers.to.as_ref().map(|to| parse_recipients_from_header(to)).unwrap_or_default();
-    let cc_list = headers.cc.as_ref().map(|cc| parse_recipients_from_header(cc)).unwrap_or_default();
-    let bcc_list = headers.bcc.as_ref().map(|bcc| parse_recipients_from_header(bcc)).unwrap_or_default();
+fn recipient_lists_from_headers(
+    headers: &TransportHeaders,
+) -> (Vec<String>, Vec<String>, Vec<String>) {
+    let to_list = headers
+        .to
+        .as_ref()
+        .map(|to| parse_recipients_from_header(to))
+        .unwrap_or_default();
+    let cc_list = headers
+        .cc
+        .as_ref()
+        .map(|cc| parse_recipients_from_header(cc))
+        .unwrap_or_default();
+    let bcc_list = headers
+        .bcc
+        .as_ref()
+        .map(|bcc| parse_recipients_from_header(bcc))
+        .unwrap_or_default();
     (to_list, cc_list, bcc_list)
 }
 
 /// Appends items from `from` into `into`, ignoring case-insensitive duplicates.
 fn merge_unique(into: &mut Vec<String>, from: &[String]) {
     for value in from {
-        if !into.iter().any(|existing| existing.eq_ignore_ascii_case(value)) {
+        if !into
+            .iter()
+            .any(|existing| existing.eq_ignore_ascii_case(value))
+        {
             into.push(value.clone());
         }
     }
@@ -378,14 +502,34 @@ fn gather_participant_emails(
         }
     };
     push_email(from_display);
-    for r in to_recipients { push_email(r); }
-    for r in cc_recipients { push_email(r); }
-    for r in bcc_recipients { push_email(r); }
+    for r in to_recipients {
+        push_email(r);
+    }
+    for r in cc_recipients {
+        push_email(r);
+    }
+    for r in bcc_recipients {
+        push_email(r);
+    }
     if let Some(headers) = transport_headers {
-        if let Some(ref v) = headers.from { push_email(v); }
-        if let Some(ref v) = headers.to { for r in parse_recipients_from_header(v) { push_email(&r); } }
-        if let Some(ref v) = headers.cc { for r in parse_recipients_from_header(v) { push_email(&r); } }
-        if let Some(ref v) = headers.bcc { for r in parse_recipients_from_header(v) { push_email(&r); } }
+        if let Some(ref v) = headers.from {
+            push_email(v);
+        }
+        if let Some(ref v) = headers.to {
+            for r in parse_recipients_from_header(v) {
+                push_email(&r);
+            }
+        }
+        if let Some(ref v) = headers.cc {
+            for r in parse_recipients_from_header(v) {
+                push_email(&r);
+            }
+        }
+        if let Some(ref v) = headers.bcc {
+            for r in parse_recipients_from_header(v) {
+                push_email(&r);
+            }
+        }
     }
     emails.sort();
     emails.dedup();
@@ -404,7 +548,9 @@ fn normalize_targets(values: &[String]) -> Vec<String> {
 /// Returns provided targets that match any participant email.
 fn find_responsive_matches(participants: &[String], provided: &[String]) -> Vec<String> {
     let provided_norm = normalize_targets(provided);
-    if provided_norm.is_empty() { return Vec::new(); }
+    if provided_norm.is_empty() {
+        return Vec::new();
+    }
     let participant_set: HashSet<&String> = participants.iter().collect();
     provided_norm
         .into_iter()
@@ -420,7 +566,9 @@ fn find_keyword_hits(body: Option<String>, keywords: &[String]) -> Vec<String> {
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
         .collect();
-    if trimmed.is_empty() { return Vec::new(); }
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
     let Some(body) = body else { return Vec::new() };
     let body_lc = body.to_ascii_lowercase();
     let mut hits: Vec<String> = trimmed
@@ -435,11 +583,19 @@ fn find_keyword_hits(body: Option<String>, keywords: &[String]) -> Vec<String> {
 /// Adds a non-empty field tuple to the summary list.
 fn push_field(fields: &mut Vec<(String, String)>, key: &str, value: Option<String>) {
     if let Some(v) = value {
-        if !v.is_empty() { fields.push((key.to_string(), v)); }
+        if !v.is_empty() {
+            fields.push((key.to_string(), v));
+        }
     }
 }
 
-struct AttachmentInfo { name: String, size: i32, attach_method: i32, content_id: String, is_inline: bool }
+struct AttachmentInfo {
+    name: String,
+    size: i32,
+    attach_method: i32,
+    content_id: String,
+    is_inline: bool,
+}
 
 /// Enumerates attachment metadata for a message, marking inline attachments.
 fn list_attachments(message: &Rc<dyn Message>) -> Option<Vec<AttachmentInfo>> {
@@ -454,7 +610,10 @@ fn list_attachments(message: &Rc<dyn Message>) -> Option<Vec<AttachmentInfo>> {
     // 0x3705 PR_ATTACH_METHOD Integer32
     // 0x0E20 PR_ATTACH_SIZE Integer32
     for row in at.rows_matrix() {
-        let cols = match row.columns(info) { Ok(c) => c, Err(_) => continue };
+        let cols = match row.columns(info) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
         let mut file_name: Option<String> = None;
         let mut long_file_name: Option<String> = None;
         let mut content_id: Option<String> = None;
@@ -468,13 +627,23 @@ fn list_attachments(message: &Rc<dyn Message>) -> Option<Vec<AttachmentInfo>> {
                     0x3704 | 0x3707 | 0x370E => {
                         if let Ok(pv) = at.read_column(valref, col_def.prop_type()) {
                             let s_opt = pv.as_string();
-                            match pid { 0x3704 => file_name = s_opt, 0x3707 => long_file_name = s_opt, 0x370E => content_id = s_opt, _ => {} }
+                            match pid {
+                                0x3704 => file_name = s_opt,
+                                0x3707 => long_file_name = s_opt,
+                                0x370E => content_id = s_opt,
+                                _ => {}
+                            }
                         }
                     }
                     0x3712 | 0x3705 | 0x0E20 => {
                         if let Ok(pv) = at.read_column(valref, col_def.prop_type()) {
                             if let Some(v) = pv.as_i32() {
-                                match pid { 0x3712 => attach_flags = Some(v), 0x3705 => attach_method = Some(v), 0x0E20 => attach_size = Some(v), _ => {} }
+                                match pid {
+                                    0x3712 => attach_flags = Some(v),
+                                    0x3705 => attach_method = Some(v),
+                                    0x0E20 => attach_size = Some(v),
+                                    _ => {}
+                                }
                             }
                         }
                     }
@@ -482,13 +651,22 @@ fn list_attachments(message: &Rc<dyn Message>) -> Option<Vec<AttachmentInfo>> {
                 }
             }
         }
-        let name = long_file_name.or(file_name).unwrap_or_else(|| "(unnamed)".to_string());
+        let name = long_file_name
+            .or(file_name)
+            .unwrap_or_else(|| "(unnamed)".to_string());
         let size = attach_size.unwrap_or(0);
         let method = attach_method.unwrap_or(0);
         let cid = content_id.unwrap_or_default();
         let flags = attach_flags.unwrap_or(0);
-        let is_inline = (flags & 0x00000004) != 0 || (!cid.is_empty() && (name.is_empty() || name.starts_with("image")));
-        results.push(AttachmentInfo { name, size, attach_method: method, content_id: cid, is_inline });
+        let is_inline = (flags & 0x00000004) != 0
+            || (!cid.is_empty() && (name.is_empty() || name.starts_with("image")));
+        results.push(AttachmentInfo {
+            name,
+            size,
+            attach_method: method,
+            content_id: cid,
+            is_inline,
+        });
     }
     Some(results)
 }
@@ -497,9 +675,22 @@ fn list_attachments(message: &Rc<dyn Message>) -> Option<Vec<AttachmentInfo>> {
 fn detect_body_types(message: &dyn Message) -> Vec<String> {
     let props = message.properties();
     let mut bodies = Vec::new();
-    if let Some(val) = props.get(0x1000) { if matches!(val, PropertyValue::String8(_) | PropertyValue::Unicode(_)) { bodies.push("text".into()) } }
-    if let Some(val) = props.get(0x1013) { if matches!(val, PropertyValue::Binary(_) | PropertyValue::String8(_) | PropertyValue::Unicode(_)) { bodies.push("html".into()) } }
-    if let Some(PropertyValue::Binary(_)) = props.get(0x1009) { bodies.push("rtf".into()); }
+    if let Some(val) = props.get(0x1000) {
+        if matches!(val, PropertyValue::String8(_) | PropertyValue::Unicode(_)) {
+            bodies.push("text".into())
+        }
+    }
+    if let Some(val) = props.get(0x1013) {
+        if matches!(
+            val,
+            PropertyValue::Binary(_) | PropertyValue::String8(_) | PropertyValue::Unicode(_)
+        ) {
+            bodies.push("html".into())
+        }
+    }
+    if let Some(PropertyValue::Binary(_)) = props.get(0x1009) {
+        bodies.push("rtf".into());
+    }
     bodies
 }
 
@@ -509,14 +700,23 @@ pub fn extract_plain_body(message: &dyn Message) -> Option<String> {
     let props = message.properties();
     // Prefer text body if available (0x1000)
     if let Some(val) = props.get(0x1000) {
-        if let Some(s) = val.as_string() { return Some(s); }
+        if let Some(s) = val.as_string() {
+            return Some(s);
+        }
     }
     // Fallback to HTML body (0x1013) and strip tags crudely
     if let Some(val) = props.get(0x1013) {
         let html_opt = match val {
             PropertyValue::Binary(b) => {
-                let code_page = props.get(0x3FDE).and_then(|v| v.as_i32()).and_then(|cp| u16::try_from(cp).ok());
-                if let Some(cp) = code_page { encoding::decode_html_body(b.buffer(), cp) } else { encoding::decode_html_body(b.buffer(), 20127) }
+                let code_page = props
+                    .get(0x3FDE)
+                    .and_then(|v| v.as_i32())
+                    .and_then(|cp| u16::try_from(cp).ok());
+                if let Some(cp) = code_page {
+                    encoding::decode_html_body(b.buffer(), cp)
+                } else {
+                    encoding::decode_html_body(b.buffer(), 20127)
+                }
             }
             _ => val.as_string(),
         };
@@ -577,9 +777,7 @@ fn process_message(
         .unwrap_or_else(|| "Unknown Date".to_string());
     let message_id = parsed_headers
         .and_then(|h| h.message_id.clone())
-        .or_else(|| {
-            properties.get(0x1035).and_then(|value| value.as_string())
-        });
+        .or_else(|| properties.get(0x1035).and_then(|value| value.as_string()));
 
     // Normalize Message-Id for duplicate detection: trim whitespace, strip surrounding <>, lowercase
     let normalize_msg_id = |s: &str| -> String {
@@ -606,15 +804,31 @@ fn process_message(
         } else {
             let (sender_name, sender_email) = get_sender_info(message.as_ref());
             format_mailbox(
-                if sender_name.is_empty() { None } else { Some(sender_name) },
-                if sender_email.is_empty() { None } else { Some(sender_email) },
+                if sender_name.is_empty() {
+                    None
+                } else {
+                    Some(sender_name)
+                },
+                if sender_email.is_empty() {
+                    None
+                } else {
+                    Some(sender_email)
+                },
             )
         }
     } else {
         let (sender_name, sender_email) = get_sender_info(message.as_ref());
         format_mailbox(
-            if sender_name.is_empty() { None } else { Some(sender_name) },
-            if sender_email.is_empty() { None } else { Some(sender_email) },
+            if sender_name.is_empty() {
+                None
+            } else {
+                Some(sender_name)
+            },
+            if sender_email.is_empty() {
+                None
+            } else {
+                Some(sender_email)
+            },
         )
     };
 
@@ -673,16 +887,36 @@ fn process_message(
     let mut flag_descriptions = Vec::new();
     if let Some(flags) = properties.get(0x0E07).and_then(|v| v.as_i32()) {
         has_attachments = flags & 0x00000010 != 0;
-        if flags & 0x00000001 != 0 { flag_descriptions.push("Read"); }
-        if flags & 0x00000002 != 0 { flag_descriptions.push("Unmodified"); }
-        if flags & 0x00000004 != 0 { flag_descriptions.push("Submit"); }
-        if flags & 0x00000008 != 0 { flag_descriptions.push("Unsent"); }
-        if has_attachments { flag_descriptions.push("Has Attachments"); }
-        if flags & 0x00000020 != 0 { flag_descriptions.push("From Me"); }
-        if flags & 0x00000040 != 0 { flag_descriptions.push("Associated"); }
-        if flags & 0x00000080 != 0 { flag_descriptions.push("Resend"); }
-        if flags & 0x00000100 != 0 { flag_descriptions.push("RN Pending"); }
-        if flags & 0x00000200 != 0 { flag_descriptions.push("NRN Pending"); }
+        if flags & 0x00000001 != 0 {
+            flag_descriptions.push("Read");
+        }
+        if flags & 0x00000002 != 0 {
+            flag_descriptions.push("Unmodified");
+        }
+        if flags & 0x00000004 != 0 {
+            flag_descriptions.push("Submit");
+        }
+        if flags & 0x00000008 != 0 {
+            flag_descriptions.push("Unsent");
+        }
+        if has_attachments {
+            flag_descriptions.push("Has Attachments");
+        }
+        if flags & 0x00000020 != 0 {
+            flag_descriptions.push("From Me");
+        }
+        if flags & 0x00000040 != 0 {
+            flag_descriptions.push("Associated");
+        }
+        if flags & 0x00000080 != 0 {
+            flag_descriptions.push("Resend");
+        }
+        if flags & 0x00000100 != 0 {
+            flag_descriptions.push("RN Pending");
+        }
+        if flags & 0x00000200 != 0 {
+            flag_descriptions.push("NRN Pending");
+        }
     }
 
     // Retrieve attachments once and reuse across list/export/CSV paths
@@ -708,15 +942,43 @@ fn process_message(
     push_field(&mut summary_fields, "Subject", Some(subject.clone()));
     push_field(&mut summary_fields, "From", Some(from_display.clone()));
     push_field(&mut summary_fields, "Date", Some(received_time.clone()));
-    push_field(&mut summary_fields, "To", if to_recipients.is_empty() { None } else { Some(to_recipients.join("; ")) });
-    push_field(&mut summary_fields, "Cc", if cc_recipients.is_empty() { None } else { Some(cc_recipients.join("; ")) });
-    push_field(&mut summary_fields, "Bcc", if bcc_recipients.is_empty() { None } else { Some(bcc_recipients.join("; ")) });
+    push_field(
+        &mut summary_fields,
+        "To",
+        if to_recipients.is_empty() {
+            None
+        } else {
+            Some(to_recipients.join("; "))
+        },
+    );
+    push_field(
+        &mut summary_fields,
+        "Cc",
+        if cc_recipients.is_empty() {
+            None
+        } else {
+            Some(cc_recipients.join("; "))
+        },
+    );
+    push_field(
+        &mut summary_fields,
+        "Bcc",
+        if bcc_recipients.is_empty() {
+            None
+        } else {
+            Some(bcc_recipients.join("; "))
+        },
+    );
     push_field(&mut summary_fields, "MessageId", message_id.clone());
     push_field(&mut summary_fields, "Folder", Some(folder_path.to_string()));
     push_field(
         &mut summary_fields,
         "Size",
-        if message_size > 0 { Some(format!("{} bytes", message_size)) } else { None },
+        if message_size > 0 {
+            Some(format!("{} bytes", message_size))
+        } else {
+            None
+        },
     );
     if matches!(action, Action::Export(_)) {
         push_field(&mut summary_fields, "Attachments", attachments_line.clone());
@@ -724,17 +986,29 @@ fn process_message(
     push_field(
         &mut summary_fields,
         "Responsive Emails",
-        if responsive_matches.is_empty() { None } else { Some(responsive_matches.join(", ")) },
+        if responsive_matches.is_empty() {
+            None
+        } else {
+            Some(responsive_matches.join(", "))
+        },
     );
     push_field(
         &mut summary_fields,
         "Flags",
-        if flag_descriptions.is_empty() { None } else { Some(flag_descriptions.join(", ")) },
+        if flag_descriptions.is_empty() {
+            None
+        } else {
+            Some(flag_descriptions.join(", "))
+        },
     );
     push_field(
         &mut summary_fields,
         "Keywords",
-        if keyword_hits.is_empty() { None } else { Some(keyword_hits.join(", ")) },
+        if keyword_hits.is_empty() {
+            None
+        } else {
+            Some(keyword_hits.join(", "))
+        },
     );
 
     let text_out: Vec<String> = summary_fields
@@ -807,8 +1081,12 @@ fn process_message(
     match action {
         Action::List(_) => {
             println!("{}", "=".repeat(80));
-            for line in &text_out { println!("{}", line); }
-            for line in &extra_list_lines { println!("{}", line); }
+            for line in &text_out {
+                println!("{}", line);
+            }
+            for line in &extra_list_lines {
+                println!("{}", line);
+            }
             println!();
         }
         Action::Export(export_args) => {
@@ -850,7 +1128,11 @@ fn process_message(
             message_id.clone().unwrap_or_default(),
             store_name,
         ];
-        row.push(if is_duplicate { "true".to_string() } else { "false".to_string() });
+        row.push(if is_duplicate {
+            "true".to_string()
+        } else {
+            "false".to_string()
+        });
         rows.push(row);
     }
 
@@ -898,7 +1180,9 @@ fn process_message(
         let idx = stats.total_messages - 1; // zero-based index
         let index_str = format!("{:05}", idx);
         let mut path = PathBuf::from(out_dir);
-        if is_duplicate { path.push("duplicates"); }
+        if is_duplicate {
+            path.push("duplicates");
+        }
         path.push(&index_str);
         fs::create_dir_all(&path)?;
         path.push("message.html");
@@ -906,7 +1190,12 @@ fn process_message(
         // Only render the minimal header set into HTML
         let html_fields: Vec<(String, String)> = summary_fields
             .iter()
-            .filter(|(k, _)| matches!(k.as_str(), "Subject" | "From" | "Date" | "To" | "Cc" | "Bcc"))
+            .filter(|(k, _)| {
+                matches!(
+                    k.as_str(),
+                    "Subject" | "From" | "Date" | "To" | "Cc" | "Bcc"
+                )
+            })
             .cloned()
             .collect();
 
@@ -916,7 +1205,9 @@ fn process_message(
         html.push_str(
             "</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}table.meta{border-collapse:collapse;width:100%;}table.meta td{border:1px solid #ddd;padding:6px;vertical-align:top;}hr{margin:18px 0;border:none;border-top:1px solid #ccc}</style></head><body>",
         );
-        html.push_str("<table class=\"meta\" style=\"background-color: #f3f3f3; font-size: 12px;\">");
+        html.push_str(
+            "<table class=\"meta\" style=\"background-color: #f3f3f3; font-size: 12px;\">",
+        );
         for (key, value) in &html_fields {
             html.push_str("<tr><td><strong>");
             html.push_str(&htmlescape::encode_minimal(key));
@@ -959,20 +1250,34 @@ fn process_message(
     Ok(())
 }
 
-
 /// Writes all attachments for a message into the given directory.
 fn save_attachments_to_dir(message: &Rc<dyn Message>, out_dir: &Path) -> anyhow::Result<()> {
     let attachments = message.attachments_export()?;
     for (idx, att) in attachments.into_iter().enumerate() {
         // Skip inline unless we want them (current behavior: include all, but mark inline in filename)
         if let Some(ref data) = att.data {
-            let base = att.name.unwrap_or_else(|| format!("attachment-{idx:03}.bin"));
-            let mut fname: String = base.chars().map(|c| match c { '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_', c if c.is_control() => '_', c => c }).collect();
-            if att.is_inline { fname = format!("inline_{}", fname); }
+            let base = att
+                .name
+                .unwrap_or_else(|| format!("attachment-{idx:03}.bin"));
+            let mut fname: String = base
+                .chars()
+                .map(|c| match c {
+                    '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+                    c if c.is_control() => '_',
+                    c => c,
+                })
+                .collect();
+            if att.is_inline {
+                fname = format!("inline_{}", fname);
+            }
             let mut path = out_dir.to_path_buf();
             path.push(&fname);
             if let Err(e) = fs::write(&path, data) {
-                eprintln!("Warning: failed to write attachment {}: {}", path.display(), e);
+                eprintln!(
+                    "Warning: failed to write attachment {}: {}",
+                    path.display(),
+                    e
+                );
             }
         }
     }
@@ -1011,7 +1316,6 @@ fn write_headers_file(dir: &Path, raw_headers: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-
 /// Walks a folder tree, processing messages and recursing into subfolders.
 fn process_folder_recursive(
     store: Rc<dyn Store>,
@@ -1024,45 +1328,82 @@ fn process_folder_recursive(
 ) -> anyhow::Result<()> {
     stats.add_folder();
     if let Some(contents_table) = folder.contents_table() {
-    // Deterministic ordering of messages by row id
-    let info = contents_table.context();
-    let mut rows: Vec<_> = contents_table.rows_matrix().collect();
-    rows.sort_by_key(|r| u32::from(r.id()));
-    for row in rows {
+        // Deterministic ordering of messages by row id
+        let info = contents_table.context();
+        let mut rows: Vec<_> = contents_table.rows_matrix().collect();
+        rows.sort_by_key(|r| u32::from(r.id()));
+        for row in rows {
             let node_id = NodeId::from(u32::from(row.id()));
             match store.properties().make_entry_id(node_id) {
                 Ok(entry_id) => match store.open_message(&entry_id, None) {
                     Ok(message) => {
                         let res = if let Some(rows) = &mut csv_rows {
-                            process_message(message, folder_path, stats, action, Some(*rows), seen_message_ids)
+                            process_message(
+                                message,
+                                folder_path,
+                                stats,
+                                action,
+                                Some(*rows),
+                                seen_message_ids,
+                            )
                         } else {
-                            process_message(message, folder_path, stats, action, None, seen_message_ids)
+                            process_message(
+                                message,
+                                folder_path,
+                                stats,
+                                action,
+                                None,
+                                seen_message_ids,
+                            )
                         };
                         if let Err(e) = res {
-                            eprintln!("Warning: Error processing message in folder '{}': {}", folder_path, e);
+                            eprintln!(
+                                "Warning: Error processing message in folder '{}': {}",
+                                folder_path, e
+                            );
                         }
                     }
                     Err(e) => {
                         stats.add_error();
-                        eprintln!("Warning: Skipped message in folder '{}' due to error: {}", folder_path, e);
+                        eprintln!(
+                            "Warning: Skipped message in folder '{}' due to error: {}",
+                            folder_path, e
+                        );
                         // Optional diagnostics for missing recipient table
-                        let debug_missing_rt = match action { Action::List(a) => a.debug_missing_rt, Action::Export(a) => a.debug_missing_rt };
-                        if debug_missing_rt && e.to_string().contains("Missing NID_TYPE_RECIPIENT_TABLE") {
+                        let debug_missing_rt = match action {
+                            Action::List(a) => a.debug_missing_rt,
+                            Action::Export(a) => a.debug_missing_rt,
+                        };
+                        if debug_missing_rt
+                            && e.to_string().contains("Missing NID_TYPE_RECIPIENT_TABLE")
+                        {
                             // Try to dump a few key properties from the contents table row
-                            let columns = match row.columns(info) { Ok(c) => c, Err(_) => Vec::new() };
-                            let get_col = |pid: u16| -> Option<outlook_pst::ltp::prop_context::PropertyValue> {
+                            let columns = match row.columns(info) {
+                                Ok(c) => c,
+                                Err(_) => Vec::new(),
+                            };
+                            let get_col = |pid: u16| -> Option<
+                                outlook_pst::ltp::prop_context::PropertyValue,
+                            > {
                                 for (col_def, value) in info.columns().iter().zip(columns.iter()) {
                                     if col_def.prop_id() == pid {
                                         if let Some(vref) = value.as_ref() {
-                                            if let Ok(pv) = contents_table.read_column(vref, col_def.prop_type()) { return Some(pv); }
+                                            if let Ok(pv) = contents_table
+                                                .read_column(vref, col_def.prop_type())
+                                            {
+                                                return Some(pv);
+                                            }
                                         }
                                     }
                                 }
                                 None
                             };
                             let msg_class = get_col(0x001A).and_then(|v| v.as_string());
-                            let subject = get_col(0x0037).and_then(|v| crate::encoding::decode_subject(&v));
-                            let recv_time = get_col(0x0E06).and_then(|v| v.as_time()).map(filetime_to_datetime);
+                            let subject =
+                                get_col(0x0037).and_then(|v| crate::encoding::decode_subject(&v));
+                            let recv_time = get_col(0x0E06)
+                                .and_then(|v| v.as_time())
+                                .map(filetime_to_datetime);
                             let flags = get_col(0x0E07).and_then(|v| v.as_i32());
                             let size = get_col(0x0E08).and_then(|v| v.as_i32());
                             let has_atts = get_col(0x0E1B).and_then(|v| v.as_bool());
@@ -1072,18 +1413,43 @@ fn process_folder_recursive(
                                 _ => None,
                             });
 
-                            eprintln!("  [missing-rt] folder='{}' row_id={} message_class='{}'", folder_path, u32::from(row.id()), msg_class.unwrap_or_else(|| "<unknown>".to_string()));
-                            if let Some(s) = subject { eprintln!("  [missing-rt] subject='{}'", s); }
-                            if let Some(ts) = recv_time { eprintln!("  [missing-rt] received='{}'", ts); }
-                            if let Some(f) = flags { eprintln!("  [missing-rt] flags=0x{:08X}", f); }
-                            if let Some(sz) = size { eprintln!("  [missing-rt] message_size={} bytes", sz); }
-                            if let Some(ha) = has_atts { eprintln!("  [missing-rt] has_attachments={}", ha); }
-                            if let Some(h) = hdr_len { eprintln!("  [missing-rt] transport_headers_length={} chars", h); }
-                            if folder_path.contains("Recoverable-Items") { eprintln!("  [missing-rt] note: message is under 'Recoverable-Items' subtree; metadata may be incomplete"); }
+                            eprintln!(
+                                "  [missing-rt] folder='{}' row_id={} message_class='{}'",
+                                folder_path,
+                                u32::from(row.id()),
+                                msg_class.unwrap_or_else(|| "<unknown>".to_string())
+                            );
+                            if let Some(s) = subject {
+                                eprintln!("  [missing-rt] subject='{}'", s);
+                            }
+                            if let Some(ts) = recv_time {
+                                eprintln!("  [missing-rt] received='{}'", ts);
+                            }
+                            if let Some(f) = flags {
+                                eprintln!("  [missing-rt] flags=0x{:08X}", f);
+                            }
+                            if let Some(sz) = size {
+                                eprintln!("  [missing-rt] message_size={} bytes", sz);
+                            }
+                            if let Some(ha) = has_atts {
+                                eprintln!("  [missing-rt] has_attachments={}", ha);
+                            }
+                            if let Some(h) = hdr_len {
+                                eprintln!("  [missing-rt] transport_headers_length={} chars", h);
+                            }
+                            if folder_path.contains("Recoverable-Items") {
+                                eprintln!("  [missing-rt] note: message is under 'Recoverable-Items' subtree; metadata may be incomplete");
+                            }
                         }
                     }
                 },
-                Err(e) => { stats.add_error(); eprintln!("Warning: Could not create entry ID for message in folder '{}': {}", folder_path, e); }
+                Err(e) => {
+                    stats.add_error();
+                    eprintln!(
+                        "Warning: Could not create entry ID for message in folder '{}': {}",
+                        folder_path, e
+                    );
+                }
             }
         }
     }
@@ -1095,7 +1461,10 @@ fn process_folder_recursive(
             let node_id = NodeId::from(node_id_u32);
             if let Ok(entry_id) = store.properties().make_entry_id(node_id) {
                 if let Ok(subfolder) = store.open_folder(&entry_id) {
-                    let subfolder_name = match subfolder.properties().display_name() { Ok(name) => name, Err(_) => "Unknown Folder".to_string() };
+                    let subfolder_name = match subfolder.properties().display_name() {
+                        Ok(name) => name,
+                        Err(_) => "Unknown Folder".to_string(),
+                    };
                     children.push((subfolder_name, node_id_u32));
                 }
             }
@@ -1106,7 +1475,11 @@ fn process_folder_recursive(
             match store.properties().make_entry_id(node_id) {
                 Ok(entry_id) => match store.open_folder(&entry_id) {
                     Ok(subfolder) => {
-                        let subfolder_path = if folder_path.is_empty() { subfolder_name } else { format!("{}/{}", folder_path, subfolder_name) };
+                        let subfolder_path = if folder_path.is_empty() {
+                            subfolder_name
+                        } else {
+                            format!("{}/{}", folder_path, subfolder_name)
+                        };
                         let res = if let Some(rows) = &mut csv_rows {
                             process_folder_recursive(
                                 store.clone(),
@@ -1128,11 +1501,22 @@ fn process_folder_recursive(
                                 seen_message_ids,
                             )
                         };
-                        if let Err(e) = res { eprintln!("Warning: Error processing folder '{}': {}", subfolder_path, e); }
+                        if let Err(e) = res {
+                            eprintln!(
+                                "Warning: Error processing folder '{}': {}",
+                                subfolder_path, e
+                            );
+                        }
                     }
-                    Err(e) => { stats.add_error(); eprintln!("Warning: Skipped subfolder due to error: {}", e); }
+                    Err(e) => {
+                        stats.add_error();
+                        eprintln!("Warning: Skipped subfolder due to error: {}", e);
+                    }
                 },
-                Err(e) => { stats.add_error(); eprintln!("Warning: Could not create entry ID for subfolder: {}", e); }
+                Err(e) => {
+                    stats.add_error();
+                    eprintln!("Warning: Could not create entry ID for subfolder: {}", e);
+                }
             }
         }
     }
@@ -1150,7 +1534,11 @@ pub fn collect_pst_files(input: &str) -> anyhow::Result<Vec<PathBuf>> {
             .filter_map(|e| e.ok())
             .map(|e| e.path())
             .filter(|p| p.is_file())
-            .filter(|p| p.extension().map(|e| e.eq_ignore_ascii_case("pst")).unwrap_or(false))
+            .filter(|p| {
+                p.extension()
+                    .map(|e| e.eq_ignore_ascii_case("pst"))
+                    .unwrap_or(false)
+            })
             .collect();
         files.sort(); // deterministic order
         return Ok(files);
@@ -1177,14 +1565,26 @@ fn process_single_pst(
         .unwrap_or_else(|_| "PST Store".to_string());
     println!("Processing emails from PST store: {}", store_name);
     println!();
-    process_folder_recursive(store.clone(), root_folder.as_ref(), "", stats, action, csv_rows, seen_message_ids)?;
+    process_folder_recursive(
+        store.clone(),
+        root_folder.as_ref(),
+        "",
+        stats,
+        action,
+        csv_rows,
+        seen_message_ids,
+    )?;
     Ok(())
 }
 
 /// Writes the accumulated CSV rows to disk, creating parents when needed.
 fn write_csv(path: &Path, rows: &[Vec<String>]) -> anyhow::Result<()> {
     // Ensure parent exists if any
-    if let Some(parent) = path.parent() { if !parent.as_os_str().is_empty() { fs::create_dir_all(parent)?; } }
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)?;
+        }
+    }
     let mut file = fs::File::create(path)?;
     // Header
     let header = [
@@ -1203,10 +1603,15 @@ fn write_csv(path: &Path, rows: &[Vec<String>]) -> anyhow::Result<()> {
         "duplicate",
     ];
     for (i, col) in header.iter().enumerate() {
-        if i > 0 { file.write_all(b",")?; }
+        if i > 0 {
+            file.write_all(b",")?;
+        }
         let mut s = col.to_string();
         // Minimal quoting
-        if s.contains([',', '"', '\n', '\r']) { s = s.replace('"', "\"\""); s = format!("\"{}\"", s); }
+        if s.contains([',', '"', '\n', '\r']) {
+            s = s.replace('"', "\"\"");
+            s = format!("\"{}\"", s);
+        }
         file.write_all(s.as_bytes())?;
     }
     file.write_all(b"\n")?;
@@ -1214,9 +1619,16 @@ fn write_csv(path: &Path, rows: &[Vec<String>]) -> anyhow::Result<()> {
     for row in rows {
         let mut first_col = true;
         for col in row {
-            if !first_col { file.write_all(b",")?; } else { first_col = false; }
+            if !first_col {
+                file.write_all(b",")?;
+            } else {
+                first_col = false;
+            }
             let mut s = col.clone();
-            if s.contains([',', '"', '\n', '\r']) { s = s.replace('"', "\"\""); s = format!("\"{}\"", s); }
+            if s.contains([',', '"', '\n', '\r']) {
+                s = s.replace('"', "\"\"");
+                s = format!("\"{}\"", s);
+            }
             file.write_all(s.as_bytes())?;
         }
         file.write_all(b"\n")?;
@@ -1235,13 +1647,19 @@ fn run_internal_multi(input: &str, action: Action) -> anyhow::Result<()> {
     // Optional CSV accumulator shared across all processed PST files in this run
     let mut csv_acc: Option<Vec<Vec<String>>> = match &action {
         Action::List(a) if a.csv => Some(Vec::new()),
-    Action::Export(a) if a.csv => Some(Vec::new()),
+        Action::Export(a) if a.csv => Some(Vec::new()),
         _ => None,
     };
     // Global MessageId set for the entire run
     let mut seen_message_ids: HashSet<String> = HashSet::new();
     for f in files {
-        if let Err(e) = process_single_pst(&f, &mut stats, &action, csv_acc.as_mut(), &mut seen_message_ids) {
+        if let Err(e) = process_single_pst(
+            &f,
+            &mut stats,
+            &action,
+            csv_acc.as_mut(),
+            &mut seen_message_ids,
+        ) {
             eprintln!("Warning: Skipping PST '{}': {}", f.display(), e);
         }
     }
@@ -1252,14 +1670,20 @@ fn run_internal_multi(input: &str, action: Action) -> anyhow::Result<()> {
             Action::Export(a) if a.csv => {
                 let mut path = PathBuf::from(&a.out_dir);
                 path.push("emails.csv");
-                if let Err(e) = write_csv(&path, &rows) { eprintln!("Warning: Failed to write CSV '{}': {}", path.display(), e); }
-                else { println!("CSV written to {}", path.display()); }
+                if let Err(e) = write_csv(&path, &rows) {
+                    eprintln!("Warning: Failed to write CSV '{}': {}", path.display(), e);
+                } else {
+                    println!("CSV written to {}", path.display());
+                }
             }
             Action::List(a) if a.csv => {
                 let mut path = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
                 path.push("emails.csv");
-                if let Err(e) = write_csv(&path, &rows) { eprintln!("Warning: Failed to write CSV '{}': {}", path.display(), e); }
-                else { println!("CSV written to {}", path.display()); }
+                if let Err(e) = write_csv(&path, &rows) {
+                    eprintln!("Warning: Failed to write CSV '{}': {}", path.display(), e);
+                } else {
+                    println!("CSV written to {}", path.display());
+                }
             }
             _ => {}
         }

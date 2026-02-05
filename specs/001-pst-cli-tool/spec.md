@@ -17,7 +17,7 @@ An eDiscovery analyst needs to export email messages from a single PST file into
 
 **Acceptance Scenarios**:
 
-1. **Given** a single PST file with 10 messages, **When** analyst runs export command with output directory, **Then** 10 HTML files (00001.html through 00010.html) are created, each in a separate numbered subfolder (00001/ through 00010/)
+1. **Given** a single PST file with 10 messages, **When** analyst runs export command with output directory, **Then** 10 subdirectories (00001/ through 00010/) are created, each containing message.html
 2. **Given** a PST file with messages containing various character encodings, **When** export runs, **Then** all HTML files display message content correctly without corruption
 3. **Given** a PST file with nested folder structure, **When** export runs, **Then** messages are extracted in deterministic order regardless of folder structure
 4. **Given** invalid PST file, **When** export runs, **Then** tool reports clear error message and exits gracefully

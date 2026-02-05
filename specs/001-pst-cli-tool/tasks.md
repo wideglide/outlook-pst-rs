@@ -17,10 +17,10 @@
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Create crates/pst-cli directory structure with src/, examples/, tests/unit, tests/integration, tests/fixtures subdirectories
-- [ ] T002 Create crates/pst-cli/Cargo.toml with dependencies: clap 4.x, anyhow, sha2, csv, encoding_rs, and workspace references to pst/compressed-rtf
-- [ ] T003 [P] Create crates/pst-cli/README.md describing the tool, installation, basic usage examples
-- [ ] T004 [P] Configure rustfmt and clippy in crates/pst-cli with workspace standards
+- [x] T001 Create crates/pst-cli directory structure with src/, examples/, tests/unit, tests/integration, tests/fixtures subdirectories
+- [x] T002 Create crates/pst-cli/Cargo.toml with dependencies: clap 4.x, anyhow, sha2, csv, encoding_rs, and workspace references to pst/compressed-rtf
+- [x] T003 [P] Create crates/pst-cli/README.md describing the tool, installation, basic usage examples
+- [x] T004 [P] Configure rustfmt and clippy in crates/pst-cli with workspace standards
 
 ---
 
@@ -30,17 +30,17 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T005 [P] Create src/lib.rs with public lib module exports and basic PST file source abstraction
-- [ ] T006 [P] Create src/error.rs with comprehensive error types (PstError, ExportError, DuplicateError, FilterError) and Display implementation per M-APP-ERROR principle
-- [ ] T007 [P] Create src/cli/mod.rs with clap derive structs for global options (--help, --version, --quiet) and subcommand enum (Export, List)
-- [ ] T008 [P] Create src/cli/mod.rs with argument parsing for export command: positional <INPUT>, required --output, optional flags (--metadata, --attachments, --headers, --csv, --keywords, --emails)
-- [ ] T009 [P] Create src/cli/progress.rs with ProgressReporter struct for progress indicator ("Processing message N/Total...") and summary statistics struct (total, duplicates, errors, elapsed_time)
-- [ ] T010 [P] Create src/export/mod.rs with ExportCoordinator struct managing overall export workflow orchestration and file I/O
-- [ ] T011 [P] Create src/list/mod.rs with ListCommand struct for folder traversal stubs (implementation in US8)
-- [ ] T012 Create src/main.rs with CLI entry point: parse args via clap, dispatch to export/list subcommands, handle --quiet flag, call progress.summary_statistics() unless --quiet
-- [ ] T013 Create crates/pst-cli/examples/simple_usage.rs demonstrating basic export/list command usage for reference
-- [ ] T014 [P] Create tests/unit/error_handling_test.rs with unit tests for error type Display formatting per M-APP-ERROR
-- [ ] T015 Create tests/fixtures/sample.pst (small test PST file with 5-10 messages for unit/integration testing - or use compressed test data)
+- [x] T005 [P] Create src/lib.rs with public lib module exports and basic PST file source abstraction
+- [x] T006 [P] Create src/error.rs with comprehensive error types (PstError, ExportError, DuplicateError, FilterError) and Display implementation per M-APP-ERROR principle
+- [x] T007 [P] Create src/cli/mod.rs with clap derive structs for global options (--help, --version, --quiet) and subcommand enum (Export, List)
+- [x] T008 [P] Create src/cli/mod.rs with argument parsing for export command: positional <INPUT>, required --output, optional flags (--metadata, --attachments, --headers, --csv, --keywords, --emails)
+- [x] T009 [P] Create src/cli/progress.rs with ProgressReporter struct for progress indicator ("Processing message N/Total...") and summary statistics struct (total, duplicates, errors, elapsed_time)
+- [x] T010 [P] Create src/export/mod.rs with ExportCoordinator struct managing overall export workflow orchestration and file I/O
+- [x] T011 [P] Create src/list/mod.rs with ListCommand struct for folder traversal stubs (implementation in US8)
+- [x] T012 Create src/main.rs with CLI entry point: parse args via clap, dispatch to export/list subcommands, handle --quiet flag, call progress.summary_statistics() unless --quiet
+- [x] T013 Create crates/pst-cli/examples/simple_usage.rs demonstrating basic export/list command usage for reference
+- [x] T014 [P] Create tests/unit/error_handling_test.rs with unit tests for error type Display formatting per M-APP-ERROR
+- [x] T015 Create tests/fixtures/sample.pst (small test PST file with 5-10 messages for unit/integration testing - or use compressed test data)
 
 **Checkpoint**: Foundation ready - project structure complete, CLI argument parsing functional, error handling in place, progress reporting infrastructure ready. User story implementation can now begin in parallel.
 

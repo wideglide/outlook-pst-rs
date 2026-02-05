@@ -1,0 +1,42 @@
+[package]
+name = "pst-cli"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+authors = ["Microsoft Corporation"]
+license = "MIT"
+description = "Command-line tool for exporting PST files to HTML for eDiscovery workflows"
+repository = "https://github.com/microsoft/outlook-pst-rs"
+keywords = ["pst", "outlook", "ediscovery", "email", "export"]
+categories = ["command-line-utilities", "email"]
+
+[dependencies]
+# Workspace crates
+outlook-pst = { path = "../pst" }
+compressed-rtf = { path = "../compressed-rtf" }
+
+# CLI parsing
+clap = { version = "4.5", features = ["derive"] }
+
+# Error handling (per M-APP-ERROR principle)
+anyhow = "1.0"
+
+# Duplicate detection (SHA-256 hashing)
+sha2 = "0.10"
+
+# CSV export
+csv = "1.3"
+
+# Character encoding handling
+encoding_rs = "0.8"
+
+[dev-dependencies]
+# Testing utilities
+tempfile = "3.8"
+
+[[bin]]
+name = "pst-cli"
+path = "src/main.rs"
+
+[lints]
+workspace = true

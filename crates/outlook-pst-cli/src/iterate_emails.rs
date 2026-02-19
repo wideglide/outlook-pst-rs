@@ -558,8 +558,8 @@ fn find_responsive_matches(participants: &[String], provided: &[String]) -> Vec<
         .collect()
 }
 
-/// Finds unique keywords present in the provided body text.
-fn find_keyword_hits(body: Option<String>, keywords: &[String]) -> Vec<String> {
+/// Finds unique keywords present in either the subject or body text.
+fn find_keyword_hits(subject: &str, body: Option<String>, keywords: &[String]) -> Vec<String> {
     let trimmed: Vec<String> = keywords
         .iter()
         .map(|s| s.trim())
@@ -569,11 +569,18 @@ fn find_keyword_hits(body: Option<String>, keywords: &[String]) -> Vec<String> {
     if trimmed.is_empty() {
         return Vec::new();
     }
-    let Some(body) = body else { return Vec::new() };
-    let body_lc = body.to_ascii_lowercase();
+    let subject_lc = subject.to_ascii_lowercase();
+    let body_lc = body.map(|b| b.to_ascii_lowercase());
     let mut hits: Vec<String> = trimmed
         .into_iter()
-        .filter(|kw| body_lc.contains(&kw.to_ascii_lowercase()))
+        .filter(|kw| {
+            let kw_lc = kw.to_ascii_lowercase();
+            subject_lc.contains(&kw_lc)
+                || body_lc
+                    .as_ref()
+                    .map(|body| body.contains(&kw_lc))
+                    .unwrap_or(false)
+        })
         .collect();
     hits.sort();
     hits.dedup();
@@ -874,7 +881,11 @@ fn process_message(
         Action::List(a) => a.keywords.clone(),
         Action::Export(a) => a.keywords.clone(),
     };
-    let keyword_hits = find_keyword_hits(extract_plain_body(message.as_ref()), &keyword_inputs);
+    let keyword_hits = find_keyword_hits(
+        &subject,
+        extract_plain_body(message.as_ref()),
+        &keyword_inputs,
+    );
     let keyword_count_for_csv = keyword_hits.len();
 
     let message_size = properties

@@ -28,6 +28,11 @@ pub struct AttachmentProperties {
 }
 
 impl AttachmentProperties {
+    /// Creates a new `AttachmentProperties` from a map of property ID to value.
+    pub fn new(properties: BTreeMap<u16, PropertyValue>) -> Self {
+        Self { properties }
+    }
+
     pub fn get(&self, id: u16) -> Option<&PropertyValue> {
         self.properties.get(&id)
     }

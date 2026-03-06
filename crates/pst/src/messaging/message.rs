@@ -2,7 +2,12 @@
 
 use std::{collections::BTreeMap, io, rc::Rc};
 
-use super::{read_write::*, store::*, *};
+use super::{
+    attachment::{AttachmentData, AttachmentMethod, AttachmentProperties},
+    read_write::*,
+    store::*,
+    *,
+};
 use crate::{
     ltp::{
         heap::HeapNode,
@@ -137,6 +142,14 @@ pub trait Message {
     fn properties(&self) -> &MessageProperties;
     fn recipient_table(&self) -> Option<&Rc<dyn TableContext>>;
     fn attachment_table(&self) -> Option<&Rc<dyn TableContext>>;
+    /// Opens an attachment sub-node and reads its properties and data.
+    ///
+    /// The `sub_node_id` should be obtained from the attachment table's row ID
+    /// column (property 0x67F2), converted to a [`NodeId`].
+    fn open_attachment_data(
+        &self,
+        sub_node_id: NodeId,
+    ) -> io::Result<(AttachmentProperties, Option<AttachmentData>)>;
 }
 
 struct MessageInner<Pst>
@@ -353,6 +366,103 @@ where
             attachment_table,
         })
     }
+
+    fn read_attachment_data(
+        &self,
+        sub_node_id: NodeId,
+    ) -> io::Result<(AttachmentProperties, Option<AttachmentData>)> {
+        let node_id_type = sub_node_id.id_type()?;
+        match node_id_type {
+            NodeIdType::Attachment => {}
+            _ => {
+                return Err(MessagingError::InvalidAttachmentNodeIdType(node_id_type).into());
+            }
+        }
+
+        let pst = self.store.pst();
+        let header = pst.header();
+        let root = header.root();
+
+        let mut file = pst
+            .reader()
+            .lock()
+            .map_err(|_| MessagingError::FailedToLockFile)?;
+        let file = &mut *file;
+
+        let encoding = header.crypt_method();
+        let block_btree = <<Pst as PstFile>::BlockBTree as RootBTreeReadWrite>::read(
+            file,
+            *root.block_btree(),
+        )?;
+
+        let node = self
+            .sub_nodes
+            .get(&sub_node_id)
+            .ok_or(MessagingError::AttachmentSubNodeNotFound(sub_node_id))?;
+        let node = <<Pst as PstFile>::NodeBTreeEntry as NodeBTreeEntryReadWrite>::new(
+            node.node(),
+            node.block(),
+            node.sub_node(),
+            None,
+        );
+
+        let mut page_cache = pst.block_cache();
+        let data = node.data();
+        let heap = <<Pst as PstFile>::HeapNode as HeapNodeReadWrite<Pst>>::read(
+            file,
+            &block_btree,
+            &mut page_cache,
+            encoding,
+            data.search_key(),
+        )?;
+        let heap_header = heap.header()?;
+
+        let tree = <Pst as PstFile>::PropertyTree::new(heap, heap_header.user_root());
+        let prop_context =
+            <<Pst as PstFile>::PropertyContext as PropertyContextReadWrite<Pst>>::new(node, tree);
+        let properties = prop_context
+            .properties()?
+            .into_iter()
+            .map(|(prop_id, record)| {
+                prop_context
+                    .read_property(file, encoding, &block_btree, &mut page_cache, record)
+                    .map(|value| (prop_id, value))
+            })
+            .collect::<io::Result<BTreeMap<_, _>>>()?;
+        let properties = AttachmentProperties::new(properties);
+
+        let attachment_method = AttachmentMethod::try_from(properties.attachment_method()?)?;
+        let data = match attachment_method {
+            AttachmentMethod::ByValue => {
+                let binary_data = match properties
+                    .get(0x3701)
+                    .ok_or(MessagingError::AttachmentMessageObjectDataNotFound)?
+                {
+                    PropertyValue::Binary(value) => value,
+                    invalid => {
+                        return Err(MessagingError::InvalidMessageObjectData(
+                            PropertyType::from(invalid),
+                        )
+                        .into())
+                    }
+                };
+                Some(AttachmentData::Binary(binary_data.clone()))
+            }
+            AttachmentMethod::EmbeddedMessage => {
+                // Embedded messages cannot be returned as binary data;
+                // callers should use the full Attachment API for embedded message support.
+                None
+            }
+            AttachmentMethod::Storage => {
+                // Storage attachments use OLE structured storage format;
+                // callers should use the full Attachment API for full storage support.
+                None
+            }
+            _ => None,
+        };
+
+        Ok((properties, data))
+    }
 }
 
 pub type MessageSubNodes<Pst> = BTreeMap<NodeId, LeafSubNodeTreeEntry<<Pst as PstFile>::BlockId>>;
@@ -388,6 +498,13 @@ impl Message for UnicodeMessage {
 
     fn attachment_table(&self) -> Option<&Rc<dyn TableContext>> {
         self.inner.attachment_table.as_ref()
+    }
+
+    fn open_attachment_data(
+        &self,
+        sub_node_id: NodeId,
+    ) -> io::Result<(AttachmentProperties, Option<AttachmentData>)> {
+        self.inner.read_attachment_data(sub_node_id)
     }
 }
 
@@ -448,6 +565,13 @@ impl Message for AnsiMessage {
 
     fn attachment_table(&self) -> Option<&Rc<dyn TableContext>> {
         self.inner.attachment_table.as_ref()
+    }
+
+    fn open_attachment_data(
+        &self,
+        sub_node_id: NodeId,
+    ) -> io::Result<(AttachmentProperties, Option<AttachmentData>)> {
+        self.inner.read_attachment_data(sub_node_id)
     }
 }
 

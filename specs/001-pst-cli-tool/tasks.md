@@ -54,20 +54,20 @@
 
 ### Implementation for User Story 1
 
-- [ ] T016 [P] [US1] Create PstMessage struct in src/lib.rs with fields: pst_id, subject, from, to, cc, bcc, date, message_id, body_html, body_rtf, body_text, attachments, headers, folder_path, flags
-- [ ] T017 [P] [US1] Create EmailAddress struct in src/lib.rs with fields: display_name, email_address
-- [ ] T018 [P] [US1] Implement Message reader in src/export/exporter.rs reading PST message data into PstMessage struct using pst crate API
-- [ ] T019 [P] [US1] Create src/export/html.rs with function to convert body to HTML (HTML body used directly; RTF decompressed via compressed-rtf crate and converted to HTML; plain text wrapped with basic HTML formatting like <p>, <br>)
-- [ ] T020 [P] [US1] Implement character encoding handling in src/export/html.rs to preserve message content accuracy with proper UTF-8 conversion
-- [ ] T021 [US1] Implement message folder structure creation in src/export/exporter.rs: create output_dir/NNNNN/ for each message number, verify path writability upfront
-- [ ] T022 [US1] Implement message.html file writing in src/export/exporter.rs with proper error handling (export partial content with error markers in HTML if conversion fails, log to stderr and error.txt file)
-- [ ] T023 [US1] Implement message numbering (5-digit zero-padded: 00001, 00002) in src/export/mod.rs with global counter across all processed messages
-- [ ] T024 [US1] Implement deterministic PST message processing order in src/lib.rs (read messages in folder order, process all messages from first PST before moving to next)
-- [ ] T025 [US1] Add --quiet flag support in src/cli/progress.rs to suppress progress indicators and summary statistics (only errors to stderr)
-- [ ] T026 [P] [US1] Unit tests for HTML conversion in tests/unit/html_test.rs: HTML pass-through, RTF to HTML (check for basic tags), plain text wrapping (check <p> and <br> tags), encoding handling
-- [ ] T027 [P] [US1] Unit tests for message numbering in tests/unit/numbering_test.rs: sequence correctness, zero-padding format, counter state management
-- [ ] T028 [US1] Integration test for basic single-file export in tests/integration/export_test.rs: create minimal PST fixture, run export, verify folder structure, verify message.html content correctness
-- [ ] T029 [US1] Create example in examples/basic_export.rs demonstrating single PST export to HTML with progress output
+- [X] T016 [P] [US1] Create PstMessage struct in src/lib.rs with fields: pst_id, subject, from, to, cc, bcc, date, message_id, body_html, body_rtf, body_text, attachments, headers, folder_path, flags
+- [X] T017 [P] [US1] Create EmailAddress struct in src/lib.rs with fields: display_name, email_address
+- [X] T018 [P] [US1] Implement Message reader in src/export/exporter.rs reading PST message data into PstMessage struct using pst crate API
+- [X] T019 [P] [US1] Create src/export/html.rs with function to convert body to HTML (HTML body used directly; RTF decompressed via compressed-rtf crate and converted to HTML; plain text wrapped with basic HTML formatting like <p>, <br>)
+- [X] T020 [P] [US1] Implement character encoding handling in src/export/html.rs to preserve message content accuracy with proper UTF-8 conversion
+- [X] T021 [US1] Implement message folder structure creation in src/export/exporter.rs: create output_dir/NNNNN/ for each message number, verify path writability upfront
+- [X] T022 [US1] Implement message.html file writing in src/export/exporter.rs with proper error handling (export partial content with error markers in HTML if conversion fails, log to stderr and error.txt file)
+- [X] T023 [US1] Implement message numbering (5-digit zero-padded: 00001, 00002) in src/export/mod.rs with global counter across all processed messages
+- [X] T024 [US1] Implement deterministic PST message processing order in src/lib.rs (read messages in folder order, process all messages from first PST before moving to next)
+- [X] T025 [US1] Add --quiet flag support in src/cli/progress.rs to suppress progress indicators and summary statistics (only errors to stderr)
+- [X] T026 [P] [US1] Unit tests for HTML conversion in tests/unit/html_test.rs: HTML pass-through, RTF to HTML (check for basic tags), plain text wrapping (check <p> and <br> tags), encoding handling
+- [X] T027 [P] [US1] Unit tests for message numbering in tests/unit/numbering_test.rs: sequence correctness, zero-padding format, counter state management
+- [X] T028 [US1] Integration test for basic single-file export in tests/integration/export_test.rs: create minimal PST fixture, run export, verify folder structure, verify message.html content correctness
+- [X] T029 [US1] Create example in examples/basic_export.rs demonstrating single PST export to HTML with progress output
 
 **Checkpoint**: User Story 1 is complete and independently testable. HTML export from single PST works correctly. MVP functionality validated.
 
@@ -81,12 +81,12 @@
 
 ### Implementation for User Story 2
 
-- [ ] T030 [P] [US2] Implement directory handling in src/lib.rs: detect if input is directory or file, scan for .pst files (case-sensitive extension on Linux/macOS)
-- [ ] T031 [P] [US2] Implement PST file discovery and alphabetical sorting in src/lib.rs to ensure deterministic processing order across multiple runs
-- [ ] T032 [US2] Implement cross-file message numbering continuation in src/export/mod.rs: after processing first PST, continue numbering sequence from last number for next PST
-- [ ] T033 [US2] Add error handling for invalid PST files in src/lib.rs: log error to stderr, continue processing remaining files in directory without stopping export
-- [ ] T034 [US2] Integration test for batch export in tests/integration/export_test.rs: create multi-PST test directory, run export twice, verify identical numbering and output structure both times (deterministic)
-- [ ] T035 [US2] Create example in examples/batch_export.rs demonstrating multi-file directory export with progress output
+- [X] T030 [P] [US2] Implement directory handling in src/lib.rs: detect if input is directory or file, scan for .pst files (case-sensitive extension on Linux/macOS)
+- [X] T031 [P] [US2] Implement PST file discovery and alphabetical sorting in src/lib.rs to ensure deterministic processing order across multiple runs
+- [X] T032 [US2] Implement cross-file message numbering continuation in src/export/mod.rs: after processing first PST, continue numbering sequence from last number for next PST
+- [X] T033 [US2] Add error handling for invalid PST files in src/lib.rs: log error to stderr, continue processing remaining files in directory without stopping export
+- [X] T034 [US2] Integration test for batch export in tests/integration/export_test.rs: create multi-PST test directory, run export twice, verify identical numbering and output structure both times (deterministic)
+- [X] T035 [US2] Create example in examples/batch_export.rs demonstrating multi-file directory export with progress output
 
 **Checkpoint**: User Stories 1 AND 2 both work. Single file and batch directory processing are functional and produce deterministic results.
 
@@ -100,15 +100,15 @@
 
 ### Implementation for User Story 3
 
-- [ ] T036 [P] [US3] Create DuplicateTracker struct in src/lib.rs with HashMap<String, u32> (hash/message_id -> sequence_number) and method to check if message is duplicate
-- [ ] T037 [P] [US3] Implement Message-ID extraction in src/duplicate/mod.rs: extract from message headers, normalize, handle missing Message-ID by returning empty string for fallback logic
-- [ ] T038 [P] [US3] Create src/duplicate/hash.rs with function to generate content hash (SHA-256 from Subject+Date+From+Body fields concatenated and hashed)
-- [ ] T039 [US3] Implement duplicate detection logic in src/duplicate/mod.rs: check Message-ID first, fallback to content hash if Message-ID missing, store identifier in DuplicateTracker, return whether message is first occurrence or duplicate
-- [ ] T040 [US3] Implement duplicates/ directory structure in src/export/exporter.rs: if message is duplicate, write to output_dir/duplicates/NNNNN/ instead of output_dir/NNNNN/
-- [ ] T041 [US3] Integrate DuplicateTracker into export pipeline in src/export/mod.rs: track duplicates across all messages, pass duplicate status to exporter
-- [ ] T042 [P] [US3] Unit tests for Message-ID extraction in tests/unit/duplicate_test.rs: empty Message-ID handling, normalization, special character handling
-- [ ] T043 [P] [US3] Unit tests for content hash generation in tests/unit/duplicate_test.rs: hash consistency (same input = same hash), different messages have different hashes
-- [ ] T044 [US3] Integration test for duplicate detection in tests/integration/duplicate_test.rs: PST with known duplicates, verify first occurrence in main dir, duplicate in duplicates/ dir, no false positives/negatives
+- [X] T036 [P] [US3] Create DuplicateTracker struct in src/lib.rs with HashMap<String, u32> (hash/message_id -> sequence_number) and method to check if message is duplicate
+- [X] T037 [P] [US3] Implement Message-ID extraction in src/duplicate/mod.rs: extract from message headers, normalize, handle missing Message-ID by returning empty string for fallback logic
+- [X] T038 [P] [US3] Create src/duplicate/hash.rs with function to generate content hash (SHA-256 from Subject+Date+From+Body fields concatenated and hashed)
+- [X] T039 [US3] Implement duplicate detection logic in src/duplicate/mod.rs: check Message-ID first, fallback to content hash if Message-ID missing, store identifier in DuplicateTracker, return whether message is first occurrence or duplicate
+- [X] T040 [US3] Implement duplicates/ directory structure in src/export/exporter.rs: if message is duplicate, write to output_dir/duplicates/NNNNN/ instead of output_dir/NNNNN/
+- [X] T041 [US3] Integrate DuplicateTracker into export pipeline in src/export/mod.rs: track duplicates across all messages, pass duplicate status to exporter
+- [X] T042 [P] [US3] Unit tests for Message-ID extraction in tests/unit/duplicate_test.rs: empty Message-ID handling, normalization, special character handling
+- [X] T043 [P] [US3] Unit tests for content hash generation in tests/unit/duplicate_test.rs: hash consistency (same input = same hash), different messages have different hashes
+- [X] T044 [US3] Integration test for duplicate detection in tests/integration/duplicate_test.rs: PST with known duplicates, verify first occurrence in main dir, duplicate in duplicates/ dir, no false positives/negatives
 
 **Checkpoint**: Duplicate detection across files is functional. Messages correctly separated into main/duplicates directories. Fallback hashing works for messages without Message-ID.
 
@@ -122,19 +122,19 @@
 
 ### Implementation for User Story 4
 
-- [ ] T045 [P] [US4] Create src/export/metadata.rs with MetadataExtractor struct to extract fields from PstMessage (Subject, From display_name and address, To/CC/BCC, Date, MessageId, Folder, Size, Attachment names, Flags)
-- [ ] T046 [P] [US4] Implement metadata.txt formatting in src/export/metadata.rs with human-readable layout and handling for missing fields (show "N/A" or empty)
-- [ ] T047 [P] [US4] Implement attachment extraction in src/export/exporter.rs: get attachment data from PstMessage, write each to message folder with original filename (or sanitized)
-- [ ] T048 [P] [US4] Implement filename sanitization for attachments in src/export/exporter.rs: replace filesystem-unsafe characters with underscores or safe alternatives, preserve file extensions
-- [ ] T049 [US4] Add --metadata flag handling in src/cli/mod.rs: parse flag, pass to export coordinator
-- [ ] T050 [US4] Add --attachments flag handling in src/cli/mod.rs: parse flag, pass to export coordinator
-- [ ] T051 [US4] Add --headers flag handling in src/cli/mod.rs: parse flag, pass to export coordinator
-- [ ] T052 [US4] Implement headers.txt generation in src/export/metadata.rs: extract full transport headers from PstMessage, write to headers.txt preserving order and formatting
-- [ ] T053 [US4] Implement attachment collision handling in src/export/exporter.rs: if two attachments have same name in same message, add numeric suffix (e.g., document_1.pdf, document_2.pdf)
-- [ ] T054 [US4] Integrate metadata/attachment/headers generation into export pipeline in src/export/exporter.rs: only generate files if corresponding flags are set
-- [ ] T055 [P] [US4] Unit tests for metadata extraction in tests/unit/metadata_test.rs: field extraction, missing field handling, display name/address parsing
-- [ ] T056 [P] [US4] Unit tests for filename sanitization in tests/unit/metadata_test.rs: special character replacement, extension preservation
-- [ ] T057 [US4] Integration test for metadata/attachments/headers export in tests/integration/export_test.rs: run with all flags, verify all files present with correct content
+- [X] T045 [P] [US4] Create src/export/metadata.rs with MetadataExtractor struct to extract fields from PstMessage (Subject, From display_name and address, To/CC/BCC, Date, MessageId, Folder, Size, Attachment names, Flags)
+- [X] T046 [P] [US4] Implement metadata.txt formatting in src/export/metadata.rs with human-readable layout and handling for missing fields (show "N/A" or empty)
+- [X] T047 [P] [US4] Implement attachment extraction in src/export/exporter.rs: get attachment data from PstMessage, write each to message folder with original filename (or sanitized)
+- [X] T048 [P] [US4] Implement filename sanitization for attachments in src/export/exporter.rs: replace filesystem-unsafe characters with underscores or safe alternatives, preserve file extensions
+- [X] T049 [US4] Add --metadata flag handling in src/cli/mod.rs: parse flag, pass to export coordinator
+- [X] T050 [US4] Add --attachments flag handling in src/cli/mod.rs: parse flag, pass to export coordinator
+- [X] T051 [US4] Add --headers flag handling in src/cli/mod.rs: parse flag, pass to export coordinator
+- [X] T052 [US4] Implement headers.txt generation in src/export/metadata.rs: extract full transport headers from PstMessage, write to headers.txt preserving order and formatting
+- [X] T053 [US4] Implement attachment collision handling in src/export/exporter.rs: if two attachments have same name in same message, add numeric suffix (e.g., document_1.pdf, document_2.pdf)
+- [X] T054 [US4] Integrate metadata/attachment/headers generation into export pipeline in src/export/exporter.rs: only generate files if corresponding flags are set
+- [X] T055 [P] [US4] Unit tests for metadata extraction in tests/unit/metadata_test.rs: field extraction, missing field handling, display name/address parsing
+- [X] T056 [P] [US4] Unit tests for filename sanitization in tests/unit/metadata_test.rs: special character replacement, extension preservation
+- [X] T057 [US4] Integration test for metadata/attachments/headers export in tests/integration/export_test.rs: run with all flags, verify all files present with correct content
 
 **Checkpoint**: Metadata, attachments, and headers export fully functional. Optional flags work correctly and don't interfere with core export flow.
 
@@ -148,15 +148,15 @@
 
 ### Implementation for User Story 5
 
-- [ ] T058 [P] [US5] Create src/export/csv.rs with CsvExporter struct managing CSV file creation and row writing
-- [ ] T059 [P] [US5] Implement CSV header row generation in src/export/csv.rs: SequenceNumber, Subject, From, To, Date, MessageId, IsDuplicate, KeywordCount, EmailMatchCount columns
-- [ ] T060 [P] [US5] Implement CSV row formatting in src/export/csv.rs with proper escaping (comma, quote, newline characters per CSV standard)
-- [ ] T061 [US5] Add --csv flag handling in src/cli/mod.rs: parse flag, pass to export coordinator
-- [ ] T062 [US5] Integrate CSV generation into export pipeline in src/export/mod.rs: write row after each message processed, open CSV file once, append rows, close after export complete
-- [ ] T063 [US5] Implement duplicate status column in src/export/csv.rs: "true" or "false" based on DuplicateTracker
-- [ ] T064 [US5] Prepare columns for keyword_count and email_match_count in src/export/csv.rs (set to 0 initially, will be populated by US6/US7)
-- [ ] T065 [P] [US5] Unit tests for CSV formatting in tests/unit/csv_test.rs: proper escaping of special characters, header generation, format validation
-- [ ] T066 [US5] Integration test for CSV export in tests/integration/export_test.rs: export with --csv, verify CSV file exists, valid format, correct row count
+- [X] T058 [P] [US5] Create src/export/csv.rs with CsvExporter struct managing CSV file creation and row writing
+- [X] T059 [P] [US5] Implement CSV header row generation in src/export/csv.rs: SequenceNumber, Subject, From, To, Date, MessageId, IsDuplicate, KeywordCount, EmailMatchCount columns
+- [X] T060 [P] [US5] Implement CSV row formatting in src/export/csv.rs with proper escaping (comma, quote, newline characters per CSV standard)
+- [X] T061 [US5] Add --csv flag handling in src/cli/mod.rs: parse flag, pass to export coordinator
+- [X] T062 [US5] Integrate CSV generation into export pipeline in src/export/mod.rs: write row after each message processed, open CSV file once, append rows, close after export complete
+- [X] T063 [US5] Implement duplicate status column in src/export/csv.rs: "true" or "false" based on DuplicateTracker
+- [X] T064 [US5] Prepare columns for keyword_count and email_match_count in src/export/csv.rs (set to 0 initially, will be populated by US6/US7)
+- [X] T065 [P] [US5] Unit tests for CSV formatting in tests/unit/csv_test.rs: proper escaping of special characters, header generation, format validation
+- [X] T066 [US5] Integration test for CSV export in tests/integration/export_test.rs: export with --csv, verify CSV file exists, valid format, correct row count
 
 **Checkpoint**: CSV export fully functional and produces valid, properly-formatted spreadsheet files with metadata summary.
 
@@ -170,15 +170,15 @@
 
 ### Implementation for User Story 6
 
-- [ ] T067 [P] [US6] Create src/filter/keyword.rs with KeywordMatcher struct managing keyword matching logic
-- [ ] T068 [P] [US6] Implement case-insensitive keyword search in src/filter/keyword.rs: search message subject and body independently, return set of matched keywords (presence only, not count of occurrences)
-- [ ] T069 [P] [US6] Implement keyword parsing in src/filter/keyword.rs: parse comma-separated list, trim whitespace, lowercase, de-duplicate
-- [ ] T070 [US6] Add --keywords flag handling in src/cli/mod.rs: parse comma-separated keyword list, pass to export coordinator
-- [ ] T071 [US6] Integrate keyword matching into export pipeline in src/export/exporter.rs: call KeywordMatcher for each message, pass matched keywords to metadata/CSV extraction
-- [ ] T072 [US6] Implement keyword reporting in metadata.txt in src/export/metadata.rs: list matched keywords or "none" if no matches
-- [ ] T073 [US6] Implement keyword_count column population in src/export/csv.rs: count of distinct matched keywords for each message
-- [ ] T074 [P] [US6] Unit tests for keyword matching in tests/unit/keyword_test.rs: case-insensitivity, multi-keyword search, presence vs count behavior, missing field handling
-- [ ] T075 [US6] Integration test for keyword filtering in tests/integration/filtering_test.rs: keyword search with known test corpus, verify accuracy and reporting
+- [x] T067 [P] [US6] Create src/filter/keyword.rs with KeywordMatcher struct managing keyword matching logic
+- [x] T068 [P] [US6] Implement case-insensitive keyword search in src/filter/keyword.rs: search message subject and body independently, return set of matched keywords (presence only, not count of occurrences)
+- [x] T069 [P] [US6] Implement keyword parsing in src/filter/keyword.rs: parse comma-separated list, trim whitespace, lowercase, de-duplicate
+- [x] T070 [US6] Add --keywords flag handling in src/cli/mod.rs: parse comma-separated keyword list, pass to export coordinator
+- [x] T071 [US6] Integrate keyword matching into export pipeline in src/export/exporter.rs: call KeywordMatcher for each message, pass matched keywords to metadata/CSV extraction
+- [x] T072 [US6] Implement keyword reporting in metadata.txt in src/export/metadata.rs: list matched keywords or "none" if no matches
+- [x] T073 [US6] Implement keyword_count column population in src/export/csv.rs: count of distinct matched keywords for each message
+- [x] T074 [P] [US6] Unit tests for keyword matching in tests/unit/keyword_test.rs: case-insensitivity, multi-keyword search, presence vs count behavior, missing field handling
+- [x] T075 [US6] Integration test for keyword filtering in tests/integration/filtering_test.rs: keyword search with known test corpus, verify accuracy and reporting
 
 **Checkpoint**: Keyword filtering fully functional. Case-insensitive search works correctly. Metadata and CSV reporting accurate.
 
@@ -192,16 +192,16 @@
 
 ### Implementation for User Story 7
 
-- [ ] T076 [P] [US7] Create src/filter/email.rs with EmailMatcher struct managing email participant matching logic
-- [ ] T077 [P] [US7] Implement email address extraction in src/filter/email.rs: parse From/To/CC/BCC fields, normalize to email address (extract from "Display Name <address@domain>" format)
-- [ ] T078 [P] [US7] Implement case-insensitive email matching in src/filter/email.rs: match on address portion only, case-insensitive, return set of matched addresses
-- [ ] T079 [P] [US7] Implement email list parsing in src/filter/email.rs: comma-separated addresses, normalize to lowercase, validate email format, de-duplicate
-- [ ] T080 [US7] Add --emails flag handling in src/cli/mod.rs: parse comma-separated email list, pass to export coordinator
-- [ ] T081 [US7] Integrate email matching into export pipeline in src/export/exporter.rs: call EmailMatcher for each message, pass matched addresses to metadata/CSV extraction
-- [ ] T082 [US7] Implement email participant reporting in metadata.txt in src/export/metadata.rs: list matched email addresses or "none" if no matches
-- [ ] T083 [US7] Implement email_match_count column population in src/export/csv.rs: count of distinct matched email addresses for each message
-- [ ] T084 [P] [US7] Unit tests for email matching in tests/unit/email_test.rs: address extraction from display name format, case-insensitivity, multi-field search, de-duplication
-- [ ] T085 [US7] Integration test for email filtering in tests/integration/filtering_test.rs: email search with known test corpus, verify accuracy and reporting
+- [x] T076 [P] [US7] Create src/filter/email.rs with EmailMatcher struct managing email participant matching logic
+- [x] T077 [P] [US7] Implement email address extraction in src/filter/email.rs: parse From/To/CC/BCC fields, normalize to email address (extract from "Display Name <address@domain>" format)
+- [x] T078 [P] [US7] Implement case-insensitive email matching in src/filter/email.rs: match on address portion only, case-insensitive, return set of matched addresses
+- [x] T079 [P] [US7] Implement email list parsing in src/filter/email.rs: comma-separated addresses, normalize to lowercase, validate email format, de-duplicate
+- [x] T080 [US7] Add --emails flag handling in src/cli/mod.rs: parse comma-separated email list, pass to export coordinator
+- [x] T081 [US7] Integrate email matching into export pipeline in src/export/exporter.rs: call EmailMatcher for each message, pass matched addresses to metadata/CSV extraction
+- [x] T082 [US7] Implement email participant reporting in metadata.txt in src/export/metadata.rs: list matched email addresses or "none" if no matches
+- [x] T083 [US7] Implement email_match_count column population in src/export/csv.rs: count of distinct matched email addresses for each message
+- [x] T084 [P] [US7] Unit tests for email matching in tests/unit/email_test.rs: address extraction from display name format, case-insensitivity, multi-field search, de-duplication
+- [x] T085 [US7] Integration test for email filtering in tests/integration/filtering_test.rs: email search with known test corpus, verify accuracy and reporting
 
 **Checkpoint**: Email participant filtering fully functional. Address extraction and matching work correctly. Metadata and CSV reporting accurate.
 
@@ -215,13 +215,13 @@
 
 ### Implementation for User Story 8
 
-- [ ] T086 [P] [US8] Implement folder hierarchy traversal in src/list/mod.rs: use pst crate API to walk folder tree, collect folder metadata (path, message count)
-- [ ] T087 [P] [US8] Implement message counting per folder in src/list/mod.rs: count messages in each folder without loading message content
-- [ ] T088 [US8] Implement folder structure formatting and display in src/list/mod.rs: tree-style output with indentation, message counts per folder, total counts
-- [ ] T089 [US8] Implement fast processing in src/list/mod.rs: skip loading message bodies/attachments, only read folder structure
-- [ ] T090 [US8] Integrate list command into main.rs: parse list subcommand, create ListCommand, output results to stdout
-- [ ] T091 [P] [US8] Unit tests for folder traversal in tests/unit/list_test.rs: hierarchy correctness, count accuracy, formatting
-- [ ] T092 [US8] Integration test for list command in tests/integration/list_test.rs: run on sample PST, verify output format and accuracy
+- [x] T086 [P] [US8] Implement folder hierarchy traversal in src/list/mod.rs: use pst crate API to walk folder tree, collect folder metadata (path, message count)
+- [x] T087 [P] [US8] Implement message counting per folder in src/list/mod.rs: count messages in each folder without loading message content
+- [x] T088 [US8] Implement folder structure formatting and display in src/list/mod.rs: tree-style output with indentation, message counts per folder, total counts
+- [x] T089 [US8] Implement fast processing in src/list/mod.rs: skip loading message bodies/attachments, only read folder structure
+- [x] T090 [US8] Integrate list command into main.rs: parse list subcommand, create ListCommand, output results to stdout
+- [x] T091 [P] [US8] Unit tests for folder traversal in tests/unit/list_test.rs: hierarchy correctness, count accuracy, formatting
+- [x] T092 [US8] Integration test for list command in tests/integration/list_test.rs: run on sample PST, verify output format and accuracy
 
 **Checkpoint**: List command fully functional. Analysts can preview PST structure quickly before exporting large files.
 
@@ -231,22 +231,22 @@
 
 **Purpose**: Improvements affecting multiple user stories, documentation, testing completeness, and performance validation.
 
-- [ ] T093 [P] Create comprehensive README.md in crates/pst-cli/ with feature overview, installation, basic usage, flag combinations, troubleshooting
-- [ ] T094 [P] Add detailed code documentation in src/lib.rs, src/export/mod.rs, src/duplicate/mod.rs, src/filter/keyword.rs with public API and internal structure descriptions
-- [ ] T095 [P] Add module-level docstrings in all src/**/*.rs files explaining purpose and key structures
-- [ ] T096 [P] Create usage examples in examples/: basic_export.rs, batch_export.rs, filtering_examples.rs demonstrating common workflows from quickstart.md
-- [ ] T097 Create performance benchmarks in tests/bench/: 1K message export, 10K message export, duplicate detection performance, measure against targets (<10 min for 10K messages)
-- [ ] T098 Create memory profiling test in tests/bench/ for large PST file streaming: load 1GB+ PST without memory exhaustion
-- [ ] T099 Run full integration test suite in tests/integration/ covering all user story combinations and edge cases
-- [ ] T100 [P] Security review of error messages in src/error.rs: verify no sensitive paths are exposed, appropriate error context provided
-- [ ] T101 [P] Security review of filename sanitization in src/export/exporter.rs: verify path traversal vulnerabilities prevented
-- [ ] T102 Cross-user story integration testing: ensure US1-US8 work correctly together, no state leaks between stories
-- [ ] T103 End-to-end validation test running all example scenarios from quickstart.md
-- [ ] T104 [P] Code cleanup: remove debug statements, unused imports, apply clippy suggestions
-- [ ] T105 [P] Final refactoring: consolidate duplicated code, improve error message clarity, optimize hot paths identified by profiling
-- [ ] T106 Update Cargo.toml metadata: description, authors, license, repository, categories, keywods for discoverability
-- [ ] T107 Create CHANGELOG.md documenting initial release (0.1.0) features
-- [ ] T108 Final git commit with comprehensive commit message summarizing all completed features
+- [x] T093 [P] Create comprehensive README.md in crates/pst-cli/ with feature overview, installation, basic usage, flag combinations, troubleshooting
+- [x] T094 [P] Add detailed code documentation in src/lib.rs, src/export/mod.rs, src/duplicate/mod.rs, src/filter/keyword.rs with public API and internal structure descriptions
+- [x] T095 [P] Add module-level docstrings in all src/**/*.rs files explaining purpose and key structures
+- [x] T096 [P] Create usage examples in examples/: basic_export.rs, batch_export.rs, filtering_examples.rs demonstrating common workflows from quickstart.md
+- [x] T097 Create performance benchmarks in tests/bench/: 1K message export, 10K message export, duplicate detection performance, measure against targets (<10 min for 10K messages)
+- [x] T098 Create memory profiling test in tests/bench/ for large PST file streaming: load 1GB+ PST without memory exhaustion
+- [x] T099 Run full integration test suite in tests/integration/ covering all user story combinations and edge cases
+- [x] T100 [P] Security review of error messages in src/error.rs: verify no sensitive paths are exposed, appropriate error context provided
+- [x] T101 [P] Security review of filename sanitization in src/export/exporter.rs: verify path traversal vulnerabilities prevented
+- [x] T102 Cross-user story integration testing: ensure US1-US8 work correctly together, no state leaks between stories
+- [x] T103 End-to-end validation test running all example scenarios from quickstart.md
+- [x] T104 [P] Code cleanup: remove debug statements, unused imports, apply clippy suggestions
+- [x] T105 [P] Final refactoring: consolidate duplicated code, improve error message clarity, optimize hot paths identified by profiling
+- [x] T106 Update Cargo.toml metadata: description, authors, license, repository, categories, keywods for discoverability
+- [x] T107 Create CHANGELOG.md documenting initial release (0.1.0) features
+- [x] T108 Final git commit with comprehensive commit message summarizing all completed features
 
 **Checkpoint**: Feature complete, well-tested, documented, and ready for release.
 

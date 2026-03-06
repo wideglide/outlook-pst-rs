@@ -70,12 +70,12 @@ pub enum FilterError {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::Pst(e) => write!(f, "PST error: {}", e),
-            Error::Export(e) => write!(f, "Export error: {}", e),
-            Error::Duplicate(e) => write!(f, "Duplicate detection error: {}", e),
-            Error::Filter(e) => write!(f, "Filter error: {}", e),
-            Error::Io(e) => write!(f, "I/O error: {}", e),
-            Error::Other(e) => write!(f, "{}", e),
+            Error::Pst(e) => write!(f, "PST error: {e}"),
+            Error::Export(e) => write!(f, "Export error: {e}"),
+            Error::Duplicate(e) => write!(f, "Duplicate detection error: {e}"),
+            Error::Filter(e) => write!(f, "Filter error: {e}"),
+            Error::Io(e) => write!(f, "I/O error: {e}"),
+            Error::Other(e) => write!(f, "{e}"),
         }
     }
 }
@@ -101,8 +101,7 @@ impl fmt::Display for PstError {
             PstError::ParseError(msg) => {
                 write!(
                     f,
-                    "Failed to parse PST: {}\n  Suggestion: The PST file may be corrupted or use an unsupported format",
-                    msg
+                    "Failed to parse PST: {msg}\n  Suggestion: The PST file may be corrupted or use an unsupported format"
                 )
             }
         }
@@ -129,15 +128,13 @@ impl fmt::Display for ExportError {
             ExportError::MessageFailed(seq, msg) => {
                 write!(
                     f,
-                    "Failed to export message {}: {}\n  Note: Export will continue with remaining messages",
-                    seq, msg
+                    "Failed to export message {seq}: {msg}\n  Note: Export will continue with remaining messages"
                 )
             }
             ExportError::HtmlConversionFailed(msg) => {
                 write!(
                     f,
-                    "HTML conversion failed: {}\n  Note: Partial content may be exported",
-                    msg
+                    "HTML conversion failed: {msg}\n  Note: Partial content may be exported"
                 )
             }
         }
@@ -148,7 +145,7 @@ impl fmt::Display for DuplicateError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             DuplicateError::HashFailed(msg) => {
-                write!(f, "Content hash generation failed: {}", msg)
+                write!(f, "Content hash generation failed: {msg}")
             }
         }
     }
@@ -160,15 +157,13 @@ impl fmt::Display for FilterError {
             FilterError::InvalidKeyword(kw) => {
                 write!(
                     f,
-                    "Invalid keyword: '{}'\n  Suggestion: Use alphanumeric keywords separated by commas",
-                    kw
+                    "Invalid keyword: '{kw}'\n  Suggestion: Use alphanumeric keywords separated by commas"
                 )
             }
             FilterError::InvalidEmail(email) => {
                 write!(
                     f,
-                    "Invalid email address: '{}'\n  Suggestion: Use valid email format: user@domain.com",
-                    email
+                    "Invalid email address: '{email}'\n  Suggestion: Use valid email format: user@domain.com"
                 )
             }
         }

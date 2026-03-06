@@ -1,6 +1,6 @@
-// Simple usage example of pst-cli
-//
-// This example demonstrates basic usage of the export and list commands
+//! Simple usage example of pst-cli
+//!
+//! This example demonstrates basic usage of the export and list commands
 
 fn main() {
     println!("=== pst-cli Usage Examples ===\n");

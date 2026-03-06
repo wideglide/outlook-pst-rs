@@ -10,6 +10,7 @@ Command-line tool for exporting PST (Personal Storage Table) files to HTML for e
 - **Metadata Export**: Extract comprehensive metadata (Subject, From, To, Date, etc.) to metadata.txt
 - **Attachment Preservation**: Save email attachments with filesystem-safe filenames
 - **CSV Summaries**: Generate spreadsheet-ready summaries for analysis and reporting
+- **Draft-Aware Export**: Skip unsent drafts by default in export output while still listing them in CSV as `[DRAFT] ...`
 - **Keyword Filtering**: Search for specific keywords in subject and body (case-insensitive)
 - **Participant Filtering**: Find messages involving specific email addresses
 - **PST Preview**: List folder structure and message counts without full export
@@ -86,6 +87,7 @@ pst-cli export <INPUT> --output <OUTPUT_DIR> [OPTIONS]
 - `--attachments`: Save email attachments
 - `--headers`: Export headers.txt with full transport headers
 - `--csv`: Generate emails.csv summary spreadsheet
+- `--drafts`: Include draft (unsent) messages in export output
 - `--keywords <LIST>`: Comma-separated keywords to search for (case-insensitive)
 - `--emails <LIST>`: Comma-separated email addresses to search for (case-insensitive)
 - `--quiet`: Suppress progress indicators and summary statistics
@@ -133,6 +135,17 @@ output_dir/
 - Accurate content preservation: HTML rendering preserves message content
 - Error resilience: Corrupted messages don't stop export; errors logged
 - Audit trail: Summary statistics and error logs for defensibility
+
+## Troubleshooting
+
+| Issue | Resolution |
+|-------|-----------|
+| `Failed to open PST file` | Verify the file exists and is a valid Outlook PST (not OST). Check read permissions. |
+| Empty `message.html` output | The original message may lack a body. Check `metadata.txt` for available fields. |
+| Garbled characters | The message may use a non-UTF-8 encoding. pst-cli attempts automatic conversion but some legacy encodings may not be fully supported. |
+| `Permission denied` on output | Ensure the output directory is writable. On macOS, check for quarantine attributes on downloaded PST files. |
+| Missing attachments | Not all PST messages contain extractable attachment data. Use `--metadata` to see attachment names listed in metadata.txt. |
+| Duplicate detection misses | Messages without a `Message-ID` header use content-hash fallback (SHA-256 of Subject+Date+From+Body). Slight differences produce different hashes. |
 
 ## Documentation
 

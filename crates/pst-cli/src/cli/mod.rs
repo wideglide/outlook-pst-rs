@@ -32,6 +32,7 @@ pub enum Command {
 
 /// Arguments for the export subcommand
 #[derive(Parser, Debug)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ExportArgs {
     /// Path to PST file or directory containing PST files
     #[arg(value_name = "INPUT")]
@@ -57,6 +58,10 @@ pub struct ExportArgs {
     #[arg(long)]
     pub csv: bool,
 
+    /// Include draft (unsent) messages in export output
+    #[arg(long)]
+    pub drafts: bool,
+
     /// Comma-separated keywords to search for (case-insensitive)
     #[arg(long, value_name = "LIST", value_delimiter = ',')]
     pub keywords: Option<Vec<String>>,
@@ -76,11 +81,13 @@ pub struct ListArgs {
 
 impl ExportArgs {
     /// Check if any filtering is enabled
+    #[must_use] 
     pub fn has_filters(&self) -> bool {
         self.keywords.is_some() || self.emails.is_some()
     }
 
     /// Get keywords as normalized (lowercase, trimmed) list
+    #[must_use] 
     pub fn normalized_keywords(&self) -> Option<Vec<String>> {
         self.keywords.as_ref().map(|kw_list| {
             kw_list
@@ -92,6 +99,7 @@ impl ExportArgs {
     }
 
     /// Get emails as normalized (lowercase, trimmed) list
+    #[must_use] 
     pub fn normalized_emails(&self) -> Option<Vec<String>> {
         self.emails.as_ref().map(|email_list| {
             email_list
@@ -116,6 +124,7 @@ mod tests {
             attachments: false,
             headers: false,
             csv: false,
+            drafts: false,
             keywords: Some(vec![
                 "  Confidential  ".to_string(),
                 "MERGER".to_string(),
@@ -137,6 +146,7 @@ mod tests {
             attachments: false,
             headers: false,
             csv: false,
+            drafts: false,
             keywords: None,
             emails: Some(vec![
                 "  John@Example.COM  ".to_string(),

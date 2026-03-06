@@ -33,6 +33,10 @@ impl PstFileSource {
     }
 
     /// Check if the path exists and is a valid PST file
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the path doesn't exist, is not a file, or lacks a `.pst` extension.
     pub fn validate(&self) -> Result<()> {
         if !self.path.exists() {
             return Err(error::Error::pst_not_found(self.path.clone()));
@@ -128,6 +132,7 @@ impl EmailAddress {
     }
 
     /// Format for display (e.g., "John Doe <john@example.com>" or "john@example.com")
+    #[must_use] 
     pub fn format_display(&self) -> String {
         if let Some(ref name) = self.display_name {
             format!("{} <{}>", name, self.email_address)

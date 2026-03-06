@@ -15,6 +15,8 @@ pub struct ProgressReporter {
     quiet: bool,
     /// Statistics tracking
     stats: ExportStatistics,
+    /// Whether draft export is enabled
+    include_drafts_in_export: bool,
 }
 
 /// Export operation statistics
@@ -30,18 +32,27 @@ pub struct ExportStatistics {
     pub keyword_matches: usize,
     /// Number of email participant matches
     pub email_matches: usize,
+    /// Number of draft messages skipped from export
+    pub drafts_skipped: usize,
     /// Elapsed time in seconds
     pub elapsed_secs: u64,
 }
 
 impl ProgressReporter {
     /// Create a new progress reporter
+    #[must_use] 
     pub fn new(quiet: bool) -> Self {
         Self {
             start_time: Instant::now(),
             quiet,
             stats: ExportStatistics::default(),
+            include_drafts_in_export: false,
         }
+    }
+
+    /// Configure whether drafts are included in export output.
+    pub fn set_include_drafts_in_export(&mut self, include: bool) {
+        self.include_drafts_in_export = include;
     }
 
     /// Update progress indicator (prints to stderr)
@@ -51,7 +62,7 @@ impl ProgressReporter {
         }
 
         // Print progress counter to stderr (updated in-place)
-        eprint!("\rProcessing message {}/{}...", current, total);
+        eprint!("\rProcessing message {current}/{total}...");
         let _ = io::stderr().flush();
     }
 
@@ -73,6 +84,11 @@ impl ProgressReporter {
     /// Record an email participant match
     pub fn record_email_match(&mut self) {
         self.stats.email_matches += 1;
+    }
+
+    /// Record a draft message skipped from export output.
+    pub fn record_draft_skipped(&mut self) {
+        self.stats.drafts_skipped += 1;
     }
 
     /// Set total messages processed
@@ -106,11 +122,16 @@ impl ProgressReporter {
             eprintln!("Email matches:       {}", self.stats.email_matches);
         }
 
+        if !self.include_drafts_in_export {
+            eprintln!("Drafts skipped:      {}", self.stats.drafts_skipped);
+        }
+
         eprintln!("Elapsed time:        {}s", self.stats.elapsed_secs);
         eprintln!("======================\n");
     }
 
     /// Get current statistics
+    #[must_use] 
     pub fn stats(&self) -> &ExportStatistics {
         &self.stats
     }
@@ -134,6 +155,7 @@ mod tests {
         assert_eq!(reporter.stats().total_messages, 10);
         assert_eq!(reporter.stats().duplicates, 1);
         assert_eq!(reporter.stats().errors, 1);
+        assert_eq!(reporter.stats().drafts_skipped, 0);
     }
 
     #[test]
@@ -148,6 +170,7 @@ mod tests {
         reporter.record_keyword_match();
         reporter.record_keyword_match();
         reporter.record_email_match();
+        reporter.record_draft_skipped();
 
         let stats = reporter.stats();
         assert_eq!(stats.total_messages, 100);
@@ -155,5 +178,6 @@ mod tests {
         assert_eq!(stats.errors, 1);
         assert_eq!(stats.keyword_matches, 3);
         assert_eq!(stats.email_matches, 1);
+        assert_eq!(stats.drafts_skipped, 1);
     }
 }

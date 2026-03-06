@@ -4,6 +4,7 @@ use sha2::{Digest, Sha256};
 
 /// Generate SHA-256 content hash from message fields
 /// Used as fallback identifier when Message-ID is missing
+#[must_use] 
 pub fn generate_content_hash(
     subject: Option<&str>,
     date: Option<&str>,

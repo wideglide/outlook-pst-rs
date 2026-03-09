@@ -390,10 +390,8 @@ where
         let file = &mut *file;
 
         let encoding = header.crypt_method();
-        let block_btree = <<Pst as PstFile>::BlockBTree as RootBTreeReadWrite>::read(
-            file,
-            *root.block_btree(),
-        )?;
+        let block_btree =
+            <<Pst as PstFile>::BlockBTree as RootBTreeReadWrite>::read(file, *root.block_btree())?;
 
         let node = self
             .sub_nodes
@@ -440,9 +438,9 @@ where
                 {
                     PropertyValue::Binary(value) => value,
                     invalid => {
-                        return Err(MessagingError::InvalidMessageObjectData(
-                            PropertyType::from(invalid),
-                        )
+                        return Err(MessagingError::InvalidMessageObjectData(PropertyType::from(
+                            invalid,
+                        ))
                         .into())
                     }
                 };

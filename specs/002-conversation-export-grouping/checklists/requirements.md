@@ -2,7 +2,7 @@
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning  
 **Created**: 2026-03-06  
-**Feature**: [/Users/jb/Source/rust_crates/spec-outlook-pst-rs/specs/001-conversation-export-grouping/spec.md](/Users/jb/Source/rust_crates/spec-outlook-pst-rs/specs/001-conversation-export-grouping/spec.md)
+**Feature**: [/Users/jb/Source/rust_crates/spec-outlook-pst-rs/specs/002-conversation-export-grouping/spec.md](/Users/jb/Source/rust_crates/spec-outlook-pst-rs/specs/002-conversation-export-grouping/spec.md)
 
 ## Content Quality
 

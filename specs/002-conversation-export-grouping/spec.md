@@ -1,6 +1,6 @@
 # Feature Specification: Conversation Export Grouping
 
-**Feature Branch**: `[001-conversation-export-grouping]`  
+**Feature Branch**: `[002-conversation-export-grouping]`  
 **Created**: 2026-03-06  
 **Status**: Draft  
 **Input**: User description: "Add a feature to export functionality where `--conversations` identifies conversations using bytes 6-21 of `PidTagConversationIndex` (16 bytes), or falls back to `PidTagConversationId` (16 bytes); messages in multi-message conversations export together under `conv_00001` style subfolders; single-message conversations stay at root; include ConversationId in `metadata.txt` when present."

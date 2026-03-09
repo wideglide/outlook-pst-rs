@@ -1,6 +1,6 @@
 # Tasks: Conversation Export Grouping
 
-**Input**: Design documents from `/specs/001-conversation-export-grouping/`
+**Input**: Design documents from `/specs/002-conversation-export-grouping/`
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
 **Tests**: Include unit, integration, and example-based validation tasks to satisfy constitution testing requirements.
@@ -111,7 +111,7 @@
 
 - [X] T021 [P] Document `--conversations` usage and folder layout examples in `crates/pst-cli/README.md`
 - [X] T022 [P] Add conversation-grouping release notes in `crates/pst-cli/CHANGELOG.md`
-- [X] T023 Run quickstart validation scenarios and record final expected outputs in `specs/001-conversation-export-grouping/quickstart.md`
+- [X] T023 Run quickstart validation scenarios and record final expected outputs in `specs/002-conversation-export-grouping/quickstart.md`
 - [X] T030 [P] Add example-based validation scenario for `--conversations` in `crates/pst-cli/examples/basic_export.rs`
 - [X] T031 Add benchmark/regression measurement for conversation grouping overhead in `crates/pst-cli/tests/bench/conversations_bench.rs`
 

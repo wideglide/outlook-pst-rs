@@ -1,7 +1,7 @@
 # Implementation Plan: Conversation Export Grouping
 
-**Branch**: `001-conversation-export-grouping` | **Date**: 2026-03-06 | **Spec**: [spec.md](spec.md)
-**Input**: Feature specification from `/specs/001-conversation-export-grouping/spec.md`
+**Branch**: `002-conversation-export-grouping` | **Date**: 2026-03-06 | **Spec**: [spec.md](spec.md)
+**Input**: Feature specification from `/specs/002-conversation-export-grouping/spec.md`
 
 **Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
 
@@ -63,7 +63,7 @@ PASS:
 ### Documentation (this feature)
 
 ```text
-specs/001-conversation-export-grouping/
+specs/002-conversation-export-grouping/
 ├── plan.md
 ├── research.md
 ├── data-model.md

@@ -2,10 +2,10 @@
 //!
 //! Generates a CSV summary file (emails.csv) with one row per processed message.
 
+use crate::error::Result;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
-use crate::error::Result;
 
 /// CSV exporter managing spreadsheet generation
 pub struct CsvExporter {
@@ -43,6 +43,16 @@ pub struct CsvRow {
     pub keyword_count: usize,
     /// Number of distinct email addresses matched in From/To/CC/BCC fields
     pub email_match_count: usize,
+    /// Message size in bytes
+    pub size: u64,
+    /// Number of attachments on the message
+    pub attachment_count: usize,
+    /// Conversation folder sequence (e.g. 00001) or empty string
+    pub conv_number: String,
+    /// Name of the originating PST store file
+    pub pst_store_name: String,
+    /// Export error indicator: 0 = success, 1 = export error
+    pub error: u8,
 }
 
 impl CsvExporter {
@@ -68,7 +78,7 @@ impl CsvExporter {
     pub fn write_header(&mut self) -> Result<()> {
         writeln!(
             self.writer,
-            "SequenceNumber,Subject,From,To,Date,MessageId,IsDuplicate,KeywordCount,EmailMatchCount"
+            "SequenceNumber,Subject,From,To,Date,MessageId,IsDuplicate,KeywordCount,EmailMatchCount,Size,AttachmentCount,ConvNumber,PST-StoreName,Error"
         )?;
         Ok(())
     }
@@ -80,7 +90,7 @@ impl CsvExporter {
     /// Returns an error on I/O failure when writing to the underlying file.
     pub fn write_row(&mut self, row: &CsvRow) -> Result<()> {
         let line = format!(
-            "{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             row.sequence_number,
             escape_csv_field(&row.subject),
             escape_csv_field(&row.from),
@@ -89,7 +99,12 @@ impl CsvExporter {
             escape_csv_field(&row.message_id),
             row.is_duplicate,
             row.keyword_count,
-            row.email_match_count
+            row.email_match_count,
+            row.size,
+            row.attachment_count,
+            &row.conv_number,
+            escape_csv_field(&row.pst_store_name),
+            row.error
         );
         writeln!(self.writer, "{line}")?;
         self.rows_written += 1;
@@ -97,7 +112,7 @@ impl CsvExporter {
     }
 
     /// Get the number of rows written (excluding header)
-    #[must_use] 
+    #[must_use]
     pub fn rows_written(&self) -> usize {
         self.rows_written
     }
@@ -121,10 +136,8 @@ impl CsvExporter {
 /// - Otherwise, use field as-is
 fn escape_csv_field(field: &str) -> String {
     // Check if escaping is needed
-    let needs_quoting = field.contains(',') 
-        || field.contains('"') 
-        || field.contains('\n')
-        || field.contains('\r');
+    let needs_quoting =
+        field.contains(',') || field.contains('"') || field.contains('\n') || field.contains('\r');
 
     if needs_quoting {
         // Escape quotes by doubling them
@@ -151,7 +164,10 @@ mod tests {
 
     #[test]
     fn test_escape_csv_field_with_quotes() {
-        assert_eq!(escape_csv_field("He said \"hello\""), "\"He said \"\"hello\"\"\"");
+        assert_eq!(
+            escape_csv_field("He said \"hello\""),
+            "\"He said \"\"hello\"\"\""
+        );
     }
 
     #[test]

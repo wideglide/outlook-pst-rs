@@ -13,6 +13,7 @@ Command-line tool for exporting PST (Personal Storage Table) files to HTML for e
 - **Draft-Aware Export**: Skip unsent drafts by default in export output while still listing them in CSV as `[DRAFT] ...`
 - **Keyword Filtering**: Search for specific keywords in subject and body (case-insensitive)
 - **Participant Filtering**: Find messages involving specific email addresses
+- **Conversation Grouping**: Route multi-message threads into deterministic `conv_#####` folders with `--conversations`
 - **PST Preview**: List folder structure and message counts without full export
 
 ## Installation
@@ -91,6 +92,7 @@ pst-cli export <INPUT> --output <OUTPUT_DIR> [OPTIONS]
 - `--keywords <LIST>`: Comma-separated keywords to search for (case-insensitive)
 - `--emails <LIST>`: Comma-separated email addresses to search for (case-insensitive)
 - `--quiet`: Suppress progress indicators and summary statistics
+- `--conversations`: Group multi-message conversations into `conv_#####` folders
 - `--help`: Display help information
 - `--version`: Display version information
 
@@ -113,6 +115,11 @@ output_dir/
 │   └── attachment.pdf    # (if --attachments)
 ├── 00002/
 │   └── message.html
+├── conv_00001/
+│   ├── 00003/
+│   │   └── message.html
+│   └── 00004/
+│       └── message.html
 ├── duplicates/
 │   └── 00005/
 │       └── message.html  # Duplicate message

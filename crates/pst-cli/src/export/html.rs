@@ -71,14 +71,11 @@ fn convert_rtf_to_html(rtf_data: &[u8], _charset: Option<&str>) -> Result<String
     // Decompress RTF using compressed-rtf crate
     use compressed_rtf::decompress_rtf;
 
-    let decompressed_str = decompress_rtf(rtf_data)
-        .map_err(|e| {
-            crate::error::Error::Export(
-                crate::error::ExportError::HtmlConversionFailed(
-                    format!("RTF decompression failed: {e}"),
-                ),
-            )
-        })?;
+    let decompressed_str = decompress_rtf(rtf_data).map_err(|e| {
+        crate::error::Error::Export(crate::error::ExportError::HtmlConversionFailed(format!(
+            "RTF decompression failed: {e}"
+        )))
+    })?;
 
     // Basic RTF-to-HTML converter: handle common RTF tags
     let html = convert_rtf_tags_to_html(&decompressed_str);

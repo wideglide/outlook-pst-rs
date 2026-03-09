@@ -3,11 +3,11 @@
 //! Tests T075: Keyword filtering with known test corpus
 //! Tests T085: Email participant filtering with known test corpus
 
-use std::path::PathBuf;
-use std::fs;
+use pst_cli::cli::progress::ProgressReporter;
 use pst_cli::cli::ExportArgs;
 use pst_cli::export::ExportCoordinator;
-use pst_cli::cli::progress::ProgressReporter;
+use std::fs;
+use std::path::PathBuf;
 use tempfile::TempDir;
 
 /// Helper to get a test PST file from fixtures
@@ -29,6 +29,7 @@ fn create_export_args(input: PathBuf, output: PathBuf) -> ExportArgs {
         headers: false,
         csv: true, // Enable CSV so we can check counts
         drafts: false,
+        conversations: false,
         keywords: None,
         emails: None,
     }
@@ -54,12 +55,16 @@ fn test_export_with_keyword_filtering() {
     let mut reporter = ProgressReporter::new(true);
 
     let result = coordinator.run(&mut reporter);
-    assert!(result.is_ok(), "Export with keywords should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Export with keywords should succeed: {:?}",
+        result.err()
+    );
 
     // Verify metadata files contain keyword sections
     let entries: Vec<_> = fs::read_dir(&output_path)
         .expect("Should read output dir")
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|e| {
             e.path().is_dir()
                 && e.file_name()
@@ -73,8 +78,7 @@ fn test_export_with_keyword_filtering() {
     for entry in &entries {
         let metadata_path = entry.path().join("metadata.txt");
         if metadata_path.exists() {
-            let content = fs::read_to_string(&metadata_path)
-                .expect("Should read metadata.txt");
+            let content = fs::read_to_string(&metadata_path).expect("Should read metadata.txt");
             // Every metadata file should have a Keywords line
             assert!(
                 content.contains("Keywords:"),
@@ -86,8 +90,7 @@ fn test_export_with_keyword_filtering() {
     // Verify CSV file contains keyword count column
     let csv_path = output_path.join("emails.csv");
     if csv_path.exists() {
-        let csv_content = fs::read_to_string(&csv_path)
-            .expect("Should read CSV");
+        let csv_content = fs::read_to_string(&csv_path).expect("Should read CSV");
         assert!(
             csv_content.contains("KeywordCount"),
             "CSV should contain KeywordCount column header"
@@ -119,7 +122,7 @@ fn test_export_keywords_metadata_reports_none_when_no_match() {
     // Check metadata files show "Keywords: none" since nothing matched
     let entries: Vec<_> = fs::read_dir(&output_path)
         .expect("Should read output dir")
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|e| {
             e.path().is_dir()
                 && e.file_name()
@@ -133,12 +136,10 @@ fn test_export_keywords_metadata_reports_none_when_no_match() {
     for entry in &entries {
         let metadata_path = entry.path().join("metadata.txt");
         if metadata_path.exists() {
-            let content = fs::read_to_string(&metadata_path)
-                .expect("Should read metadata.txt");
+            let content = fs::read_to_string(&metadata_path).expect("Should read metadata.txt");
             assert!(
                 content.contains("Keywords: none"),
-                "Keywords should be 'none' when keyword doesn't match, got: {}",
-                content
+                "Keywords should be 'none' when keyword doesn't match, got: {content}"
             );
         }
     }
@@ -159,18 +160,25 @@ fn test_export_with_email_filtering() {
 
     let mut args = create_export_args(pst_path, output_path.clone());
     // Search for an email that might be in the test PST
-    args.emails = Some(vec!["test@example.com".to_string(), "user@example.com".to_string()]);
+    args.emails = Some(vec![
+        "test@example.com".to_string(),
+        "user@example.com".to_string(),
+    ]);
 
     let mut coordinator = ExportCoordinator::new(args);
     let mut reporter = ProgressReporter::new(true);
 
     let result = coordinator.run(&mut reporter);
-    assert!(result.is_ok(), "Export with emails should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Export with emails should succeed: {:?}",
+        result.err()
+    );
 
     // Verify metadata files contain email match sections
     let entries: Vec<_> = fs::read_dir(&output_path)
         .expect("Should read output dir")
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|e| {
             e.path().is_dir()
                 && e.file_name()
@@ -184,8 +192,7 @@ fn test_export_with_email_filtering() {
     for entry in &entries {
         let metadata_path = entry.path().join("metadata.txt");
         if metadata_path.exists() {
-            let content = fs::read_to_string(&metadata_path)
-                .expect("Should read metadata.txt");
+            let content = fs::read_to_string(&metadata_path).expect("Should read metadata.txt");
             // Every metadata file should have an Email Matches line
             assert!(
                 content.contains("Email Matches:"),
@@ -197,8 +204,7 @@ fn test_export_with_email_filtering() {
     // Verify CSV file contains EmailMatchCount column
     let csv_path = output_path.join("emails.csv");
     if csv_path.exists() {
-        let csv_content = fs::read_to_string(&csv_path)
-            .expect("Should read CSV");
+        let csv_content = fs::read_to_string(&csv_path).expect("Should read CSV");
         assert!(
             csv_content.contains("EmailMatchCount"),
             "CSV should contain EmailMatchCount column header"
@@ -229,7 +235,7 @@ fn test_export_emails_metadata_reports_none_when_no_match() {
 
     let entries: Vec<_> = fs::read_dir(&output_path)
         .expect("Should read output dir")
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|e| {
             e.path().is_dir()
                 && e.file_name()
@@ -243,12 +249,10 @@ fn test_export_emails_metadata_reports_none_when_no_match() {
     for entry in &entries {
         let metadata_path = entry.path().join("metadata.txt");
         if metadata_path.exists() {
-            let content = fs::read_to_string(&metadata_path)
-                .expect("Should read metadata.txt");
+            let content = fs::read_to_string(&metadata_path).expect("Should read metadata.txt");
             assert!(
                 content.contains("Email Matches: none"),
-                "Email Matches should be 'none' when no email matches, got: {}",
-                content
+                "Email Matches should be 'none' when no email matches, got: {content}"
             );
         }
     }
@@ -273,21 +277,30 @@ fn test_export_combined_keyword_and_email_filtering() {
     let mut reporter = ProgressReporter::new(true);
 
     let result = coordinator.run(&mut reporter);
-    assert!(result.is_ok(), "Export with both filters should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Export with both filters should succeed: {:?}",
+        result.err()
+    );
 
     // Verify CSV has both count columns
     let csv_path = output_path.join("emails.csv");
     if csv_path.exists() {
-        let csv_content = fs::read_to_string(&csv_path)
-            .expect("Should read CSV");
-        assert!(csv_content.contains("KeywordCount"), "CSV should have KeywordCount");
-        assert!(csv_content.contains("EmailMatchCount"), "CSV should have EmailMatchCount");
+        let csv_content = fs::read_to_string(&csv_path).expect("Should read CSV");
+        assert!(
+            csv_content.contains("KeywordCount"),
+            "CSV should have KeywordCount"
+        );
+        assert!(
+            csv_content.contains("EmailMatchCount"),
+            "CSV should have EmailMatchCount"
+        );
     }
 
     // Verify metadata has both sections
     let entries: Vec<_> = fs::read_dir(&output_path)
         .expect("Should read output dir")
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|e| {
             e.path().is_dir()
                 && e.file_name()
@@ -301,10 +314,15 @@ fn test_export_combined_keyword_and_email_filtering() {
     for entry in &entries {
         let metadata_path = entry.path().join("metadata.txt");
         if metadata_path.exists() {
-            let content = fs::read_to_string(&metadata_path)
-                .expect("Should read metadata.txt");
-            assert!(content.contains("Keywords:"), "Should have Keywords section");
-            assert!(content.contains("Email Matches:"), "Should have Email Matches section");
+            let content = fs::read_to_string(&metadata_path).expect("Should read metadata.txt");
+            assert!(
+                content.contains("Keywords:"),
+                "Should have Keywords section"
+            );
+            assert!(
+                content.contains("Email Matches:"),
+                "Should have Email Matches section"
+            );
         }
     }
 }
@@ -332,16 +350,24 @@ fn test_csv_email_match_count_accuracy() {
 
     let csv_path = output_path.join("emails.csv");
     if csv_path.exists() {
-        let csv_content = fs::read_to_string(&csv_path)
-            .expect("Should read CSV");
+        let csv_content = fs::read_to_string(&csv_path).expect("Should read CSV");
         let lines: Vec<&str> = csv_content.lines().collect();
-        
+        let header_fields: Vec<&str> = lines
+            .first()
+            .expect("CSV should include a header row")
+            .split(',')
+            .collect();
+        let email_match_count_idx = header_fields
+            .iter()
+            .position(|field| *field == "EmailMatchCount")
+            .expect("CSV header should include EmailMatchCount column");
+
         // Skip header, check each data row
         for line in lines.iter().skip(1) {
-            // Last field is EmailMatchCount
+            // Pull EmailMatchCount by column name so schema extension is safe.
             let fields: Vec<&str> = line.split(',').collect();
-            if let Some(last) = fields.last() {
-                let count: usize = last.trim().parse().unwrap_or(999);
+            if let Some(count_field) = fields.get(email_match_count_idx) {
+                let count: usize = count_field.trim().parse().unwrap_or(999);
                 assert_eq!(
                     count, 0,
                     "All email match counts should be 0 for non-matching address"

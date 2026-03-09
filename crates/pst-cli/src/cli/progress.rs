@@ -40,7 +40,7 @@ pub struct ExportStatistics {
 
 impl ProgressReporter {
     /// Create a new progress reporter
-    #[must_use] 
+    #[must_use]
     pub fn new(quiet: bool) -> Self {
         Self {
             start_time: Instant::now(),
@@ -131,7 +131,7 @@ impl ProgressReporter {
     }
 
     /// Get current statistics
-    #[must_use] 
+    #[must_use]
     pub fn stats(&self) -> &ExportStatistics {
         &self.stats
     }
@@ -144,7 +144,7 @@ mod tests {
     #[test]
     fn test_progress_reporter_quiet() {
         let mut reporter = ProgressReporter::new(true);
-        
+
         // These should not panic or output anything
         reporter.update_progress(5, 10);
         reporter.record_duplicate();

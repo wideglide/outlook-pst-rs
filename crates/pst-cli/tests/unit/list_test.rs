@@ -2,8 +2,8 @@
 //!
 //! Tests hierarchy correctness, count accuracy, and formatting.
 
-use pst_cli::list::ListCommand;
 use pst_cli::cli::ListArgs;
+use pst_cli::list::ListCommand;
 use std::path::PathBuf;
 
 /// Helper to get a test PST file
@@ -38,14 +38,16 @@ fn test_list_command_nonexistent_file() {
 fn test_list_command_runs_on_real_pst() {
     let pst_path = get_test_pst_path();
     if !pst_path.exists() {
-        eprintln!("Skipping test: fixture not found at {:?}", pst_path);
+        eprintln!("Skipping test: fixture not found at {pst_path:?}");
         return;
     }
 
-    let args = ListArgs {
-        pst_file: pst_path,
-    };
+    let args = ListArgs { pst_file: pst_path };
     let cmd = ListCommand::new(args);
     let result = cmd.run();
-    assert!(result.is_ok(), "List command should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "List command should succeed: {:?}",
+        result.err()
+    );
 }

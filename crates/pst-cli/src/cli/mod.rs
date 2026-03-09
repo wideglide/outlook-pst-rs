@@ -62,6 +62,10 @@ pub struct ExportArgs {
     #[arg(long)]
     pub drafts: bool,
 
+    /// Group multi-message conversations under deterministic conv_##### folders
+    #[arg(long)]
+    pub conversations: bool,
+
     /// Comma-separated keywords to search for (case-insensitive)
     #[arg(long, value_name = "LIST", value_delimiter = ',')]
     pub keywords: Option<Vec<String>>,
@@ -81,13 +85,13 @@ pub struct ListArgs {
 
 impl ExportArgs {
     /// Check if any filtering is enabled
-    #[must_use] 
+    #[must_use]
     pub fn has_filters(&self) -> bool {
         self.keywords.is_some() || self.emails.is_some()
     }
 
     /// Get keywords as normalized (lowercase, trimmed) list
-    #[must_use] 
+    #[must_use]
     pub fn normalized_keywords(&self) -> Option<Vec<String>> {
         self.keywords.as_ref().map(|kw_list| {
             kw_list
@@ -99,7 +103,7 @@ impl ExportArgs {
     }
 
     /// Get emails as normalized (lowercase, trimmed) list
-    #[must_use] 
+    #[must_use]
     pub fn normalized_emails(&self) -> Option<Vec<String>> {
         self.emails.as_ref().map(|email_list| {
             email_list
@@ -125,10 +129,11 @@ mod tests {
             headers: false,
             csv: false,
             drafts: false,
+            conversations: false,
             keywords: Some(vec![
                 "  Confidential  ".to_string(),
                 "MERGER".to_string(),
-                "".to_string(),
+                String::new(),
             ]),
             emails: None,
         };
@@ -147,6 +152,7 @@ mod tests {
             headers: false,
             csv: false,
             drafts: false,
+            conversations: false,
             keywords: None,
             emails: Some(vec![
                 "  John@Example.COM  ".to_string(),

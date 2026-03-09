@@ -1,7 +1,8 @@
 //! Unit tests for keyword matching (T074)
 //!
 //! Tests case-insensitivity, multi-keyword search, presence vs count behavior,
-//! and missing field handling for KeywordMatcher.
+//! and missing field handling for `KeywordMatcher`.
+#![allow(clippy::similar_names)]
 
 use pst_cli::filter::keyword::KeywordMatcher;
 use std::collections::HashSet;
@@ -32,7 +33,7 @@ fn test_from_string_lowercases_all() {
     let matcher = KeywordMatcher::from_string("UPPER,lower,MiXeD");
     let kws = matcher.keywords();
     for kw in &kws {
-        assert_eq!(kw, &kw.to_lowercase(), "Keyword should be lowercase: {}", kw);
+        assert_eq!(kw, &kw.to_lowercase(), "Keyword should be lowercase: {kw}");
     }
 }
 
@@ -164,7 +165,11 @@ fn test_search_message_deduplicates_across_subject_and_body() {
         Some("Urgent action required"),
         Some("This is urgent, please respond."),
     );
-    assert_eq!(matches.len(), 1, "Same keyword in subject+body should count once");
+    assert_eq!(
+        matches.len(),
+        1,
+        "Same keyword in subject+body should count once"
+    );
 }
 
 #[test]

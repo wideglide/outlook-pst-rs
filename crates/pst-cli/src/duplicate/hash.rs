@@ -4,7 +4,7 @@ use sha2::{Digest, Sha256};
 
 /// Generate SHA-256 content hash from message fields
 /// Used as fallback identifier when Message-ID is missing
-#[must_use] 
+#[must_use]
 pub fn generate_content_hash(
     subject: Option<&str>,
     date: Option<&str>,
@@ -65,7 +65,7 @@ mod tests {
     #[test]
     fn test_content_hash_none_fields() {
         let hash = generate_content_hash(None, None, None, None);
-        
+
         // Should not panic, should produce valid hash
         assert_eq!(hash.len(), 64);
     }

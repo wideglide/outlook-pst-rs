@@ -54,7 +54,10 @@ impl PstFileSource {
             if ext != "pst" {
                 return Err(error::Error::pst_invalid(
                     self.path.clone(),
-                    format!("Invalid extension: expected .pst, got .{}", ext.to_string_lossy()),
+                    format!(
+                        "Invalid extension: expected .pst, got .{}",
+                        ext.to_string_lossy()
+                    ),
                 ));
             }
         } else {
@@ -132,7 +135,7 @@ impl EmailAddress {
     }
 
     /// Format for display (e.g., "John Doe <john@example.com>" or "john@example.com")
-    #[must_use] 
+    #[must_use]
     pub fn format_display(&self) -> String {
         if let Some(ref name) = self.display_name {
             format!("{} <{}>", name, self.email_address)

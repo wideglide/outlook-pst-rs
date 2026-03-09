@@ -7,8 +7,8 @@
 
 #![allow(clippy::cast_precision_loss)]
 
-use pst_cli::cli::ExportArgs;
 use pst_cli::cli::progress::ProgressReporter;
+use pst_cli::cli::ExportArgs;
 use pst_cli::export::ExportCoordinator;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -43,6 +43,7 @@ fn bench_basic_export_single_pst() {
         headers: false,
         csv: false,
         drafts: false,
+        conversations: false,
         keywords: None,
         emails: None,
     };
@@ -66,8 +67,14 @@ fn bench_basic_export_single_pst() {
     eprintln!("  Messages: {msg_count}");
     eprintln!("  Elapsed:  {elapsed:.2?}");
     eprintln!("  Per msg:  {per_msg_ms:.2} ms");
-    eprintln!("  Extrapolated 1K:  {:.1} sec", per_msg_ms * 1_000.0 / 1_000.0);
-    eprintln!("  Extrapolated 10K: {:.1} sec", per_msg_ms * 10_000.0 / 1_000.0);
+    eprintln!(
+        "  Extrapolated 1K:  {:.1} sec",
+        per_msg_ms * 1_000.0 / 1_000.0
+    );
+    eprintln!(
+        "  Extrapolated 10K: {:.1} sec",
+        per_msg_ms * 10_000.0 / 1_000.0
+    );
 
     let ten_k_seconds = per_msg_ms * 10_000.0 / 1_000.0;
     eprintln!(
@@ -98,6 +105,7 @@ fn bench_full_export_all_flags() {
         headers: true,
         csv: true,
         drafts: false,
+        conversations: false,
         keywords: Some(vec!["test".to_string(), "email".to_string()]),
         emails: Some(vec!["watson".to_string()]),
     };
@@ -122,8 +130,14 @@ fn bench_full_export_all_flags() {
     eprintln!("  Duplicates:  {}", stats.duplicates);
     eprintln!("  Elapsed:     {elapsed:.2?}");
     eprintln!("  Per msg:     {per_msg_ms:.2} ms");
-    eprintln!("  Extrapolated 1K:  {:.1} sec", per_msg_ms * 1_000.0 / 1_000.0);
-    eprintln!("  Extrapolated 10K: {:.1} sec", per_msg_ms * 10_000.0 / 1_000.0);
+    eprintln!(
+        "  Extrapolated 1K:  {:.1} sec",
+        per_msg_ms * 1_000.0 / 1_000.0
+    );
+    eprintln!(
+        "  Extrapolated 10K: {:.1} sec",
+        per_msg_ms * 10_000.0 / 1_000.0
+    );
 
     let ten_k_seconds = per_msg_ms * 10_000.0 / 1_000.0;
     eprintln!(
@@ -154,6 +168,7 @@ fn bench_batch_export() {
         headers: false,
         csv: true,
         drafts: false,
+        conversations: false,
         keywords: None,
         emails: None,
     };
@@ -210,6 +225,7 @@ fn bench_duplicate_detection_overhead() {
         headers: false,
         csv: false,
         drafts: false,
+        conversations: false,
         keywords: None,
         emails: None,
     };
@@ -229,6 +245,7 @@ fn bench_duplicate_detection_overhead() {
         headers: false,
         csv: false,
         drafts: false,
+        conversations: false,
         keywords: None,
         emails: None,
     };

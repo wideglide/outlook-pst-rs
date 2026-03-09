@@ -17,7 +17,7 @@ impl EmailMatcher {
     /// Create a new email matcher from a vector of email address strings.
     /// Normalizes to lowercase, trims whitespace, extracts address from
     /// "Display Name <addr>" format, and deduplicates.
-    #[must_use] 
+    #[must_use]
     pub fn new(emails: Vec<String>) -> Self {
         let emails = emails
             .into_iter()
@@ -29,7 +29,7 @@ impl EmailMatcher {
 
     /// Create a new email matcher from a comma-separated string.
     /// Handles parsing, trimming, lowercasing, extraction, and deduplication.
-    #[must_use] 
+    #[must_use]
     pub fn from_string(emails_str: &str) -> Self {
         let emails = emails_str
             .split(',')
@@ -40,7 +40,7 @@ impl EmailMatcher {
     }
 
     /// Get the sorted list of target email addresses
-    #[must_use] 
+    #[must_use]
     pub fn emails(&self) -> Vec<String> {
         let mut emails: Vec<_> = self.emails.iter().cloned().collect();
         emails.sort();
@@ -50,7 +50,7 @@ impl EmailMatcher {
     /// Check if any of the provided address strings match target emails.
     /// Each address string is normalized (extract address, lowercase) before comparison.
     /// Returns set of matched email addresses (from the target list).
-    #[must_use] 
+    #[must_use]
     pub fn find_matches_str(&self, addresses: &[String]) -> HashSet<String> {
         addresses
             .iter()
@@ -61,7 +61,7 @@ impl EmailMatcher {
 
     /// Search message From, To, CC, BCC string fields for target email addresses.
     /// Returns set of matched email addresses (presence only, deduplicated).
-    #[must_use] 
+    #[must_use]
     pub fn search_message(
         &self,
         from: &str,
@@ -86,7 +86,7 @@ impl EmailMatcher {
     }
 
     /// Get count of matched emails
-    #[must_use] 
+    #[must_use]
     pub fn match_count(matches: &HashSet<String>) -> usize {
         matches.len()
     }
@@ -97,7 +97,7 @@ impl EmailMatcher {
 ///
 /// Returns the address portion only, trimmed. If no angle brackets found,
 /// returns the entire string trimmed.
-#[must_use] 
+#[must_use]
 pub fn extract_email_address(input: &str) -> String {
     let trimmed = input.trim();
     if let Some(start) = trimmed.rfind('<') {
@@ -112,6 +112,7 @@ pub fn extract_email_address(input: &str) -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::similar_names)]
 mod tests {
     use super::*;
 
@@ -119,7 +120,10 @@ mod tests {
 
     #[test]
     fn test_extract_plain_address() {
-        assert_eq!(extract_email_address("john@example.com"), "john@example.com");
+        assert_eq!(
+            extract_email_address("john@example.com"),
+            "john@example.com"
+        );
     }
 
     #[test]
@@ -171,9 +175,7 @@ mod tests {
 
     #[test]
     fn test_new_extracts_from_display_name() {
-        let matcher = EmailMatcher::new(vec![
-            "John Doe <john@example.com>".to_string(),
-        ]);
+        let matcher = EmailMatcher::new(vec!["John Doe <john@example.com>".to_string()]);
         let emails = matcher.emails();
         assert_eq!(emails, vec!["john@example.com"]);
     }
@@ -191,7 +193,7 @@ mod tests {
     #[test]
     fn test_new_filters_empty() {
         let matcher = EmailMatcher::new(vec![
-            "".to_string(),
+            String::new(),
             "  ".to_string(),
             "valid@example.com".to_string(),
         ]);
@@ -214,7 +216,8 @@ mod tests {
 
     #[test]
     fn test_from_string_with_display_names() {
-        let matcher = EmailMatcher::from_string("John <john@example.com>, Jane Doe <jane@example.com>");
+        let matcher =
+            EmailMatcher::from_string("John <john@example.com>, Jane Doe <jane@example.com>");
         let emails = matcher.emails();
         assert_eq!(emails.len(), 2);
         assert!(emails.contains(&"john@example.com".to_string()));
@@ -223,7 +226,9 @@ mod tests {
 
     #[test]
     fn test_from_string_deduplication() {
-        let matcher = EmailMatcher::from_string("john@example.com, JOHN@EXAMPLE.COM, John <john@example.com>");
+        let matcher = EmailMatcher::from_string(
+            "john@example.com, JOHN@EXAMPLE.COM, John <john@example.com>",
+        );
         assert_eq!(matcher.emails().len(), 1);
     }
 
@@ -262,9 +267,7 @@ mod tests {
     fn test_find_matches_with_display_names() {
         let matcher = EmailMatcher::new(vec!["john@example.com".to_string()]);
 
-        let addresses = vec![
-            "John Doe <JOHN@EXAMPLE.COM>".to_string(),
-        ];
+        let addresses = vec!["John Doe <JOHN@EXAMPLE.COM>".to_string()];
 
         let matches = matcher.find_matches_str(&addresses);
         assert_eq!(matches.len(), 1);
@@ -276,9 +279,7 @@ mod tests {
         // Display name contains "john@example.com" but email address is different
         let matcher = EmailMatcher::new(vec!["john@example.com".to_string()]);
 
-        let addresses = vec![
-            "other@domain.com".to_string(),
-        ];
+        let addresses = vec!["other@domain.com".to_string()];
 
         let matches = matcher.find_matches_str(&addresses);
         assert_eq!(matches.len(), 0);
@@ -290,12 +291,7 @@ mod tests {
     fn test_search_message_from_match() {
         let matcher = EmailMatcher::new(vec!["sender@example.com".to_string()]);
 
-        let matches = matcher.search_message(
-            "Sender Name <sender@example.com>",
-            &[],
-            &[],
-            &[],
-        );
+        let matches = matcher.search_message("Sender Name <sender@example.com>", &[], &[], &[]);
         assert_eq!(matches.len(), 1);
         assert!(matches.contains("sender@example.com"));
     }
@@ -306,7 +302,10 @@ mod tests {
 
         let matches = matcher.search_message(
             "sender@other.com",
-            &["TARGET@EXAMPLE.COM".to_string(), "other@example.com".to_string()],
+            &[
+                "TARGET@EXAMPLE.COM".to_string(),
+                "other@example.com".to_string(),
+            ],
             &[],
             &[],
         );

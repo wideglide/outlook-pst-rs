@@ -8,8 +8,8 @@
 
 #![allow(clippy::cast_precision_loss)]
 
-use pst_cli::cli::ExportArgs;
 use pst_cli::cli::progress::ProgressReporter;
+use pst_cli::cli::ExportArgs;
 use pst_cli::export::ExportCoordinator;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -44,6 +44,7 @@ fn bench_memory_largest_pst() {
         headers: true,
         csv: true,
         drafts: false,
+        conversations: false,
         keywords: None,
         emails: None,
     };
@@ -88,11 +89,7 @@ fn bench_memory_sequential_all_psts() {
     let total_size: u64 = std::fs::read_dir(&dir)
         .unwrap()
         .filter_map(Result::ok)
-        .filter(|e| {
-            e.path()
-                .extension()
-                .is_some_and(|ext| ext == "pst")
-        })
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "pst"))
         .map(|e| e.metadata().unwrap().len())
         .sum();
 
@@ -105,6 +102,7 @@ fn bench_memory_sequential_all_psts() {
         headers: true,
         csv: true,
         drafts: false,
+        conversations: false,
         keywords: Some(vec!["test".to_string()]),
         emails: Some(vec!["watson".to_string()]),
     };

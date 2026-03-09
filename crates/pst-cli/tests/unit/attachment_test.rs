@@ -33,7 +33,9 @@ fn test_attachment_with_special_chars_in_filename() {
     let attachment = Attachment {
         filename: "my document (final).docx".to_string(),
         data: vec![0x50, 0x4B, 0x03, 0x04], // ZIP header (DOCX is a ZIP)
-        content_type: Some("application/vnd.openxmlformats-officedocument.wordprocessingml.document".to_string()),
+        content_type: Some(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document".to_string(),
+        ),
     };
 
     assert_eq!(attachment.filename, "my document (final).docx");

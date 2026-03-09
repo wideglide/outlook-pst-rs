@@ -3,13 +3,18 @@
 //! Tests address extraction from display name format, case-insensitivity,
 //! multi-field search, and de-duplication.
 
-use pst_cli::filter::email::{EmailMatcher, extract_email_address};
+#![allow(clippy::similar_names)]
+
+use pst_cli::filter::email::{extract_email_address, EmailMatcher};
 
 // --- Address extraction from "Display Name <address>" format ---
 
 #[test]
 fn test_extract_plain_email() {
-    assert_eq!(extract_email_address("user@example.com"), "user@example.com");
+    assert_eq!(
+        extract_email_address("user@example.com"),
+        "user@example.com"
+    );
 }
 
 #[test]
@@ -107,12 +112,7 @@ fn test_search_across_all_fields() {
 fn test_search_from_only() {
     let matcher = EmailMatcher::new(vec!["target@example.com".to_string()]);
 
-    let matches = matcher.search_message(
-        "Target <target@example.com>",
-        &[],
-        &[],
-        &[],
-    );
+    let matches = matcher.search_message("Target <target@example.com>", &[], &[], &[]);
     assert_eq!(matches.len(), 1);
 }
 
@@ -219,12 +219,7 @@ fn test_empty_to_cc_bcc() {
 #[test]
 fn test_from_field_with_display_name() {
     let matcher = EmailMatcher::new(vec!["john@example.com".to_string()]);
-    let matches = matcher.search_message(
-        "John Doe <john@example.com>",
-        &[],
-        &[],
-        &[],
-    );
+    let matches = matcher.search_message("John Doe <john@example.com>", &[], &[], &[]);
     assert_eq!(matches.len(), 1);
 }
 

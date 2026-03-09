@@ -5,29 +5,41 @@
 //! attachments, headers), running duplicate detection and keyword/email
 //! filtering, and writing output files via the exporter.
 
-use crate::cli::ExportArgs;
 use crate::cli::progress::ProgressReporter;
-use crate::error::Result;
-use crate::export::exporter::{MessageData, Attachment};
-use crate::export::csv::{CsvExporter, CsvRow};
+use crate::cli::ExportArgs;
 use crate::duplicate::DuplicateTracker;
-use crate::filter::keyword::KeywordMatcher;
+use crate::error::Result;
+use crate::export::conversation::{assign_conversation_folders, ConversationCandidate};
+use crate::export::csv::{CsvExporter, CsvRow};
+use crate::export::exporter::{Attachment, MessageData};
 use crate::filter::email::EmailMatcher;
+use crate::filter::keyword::KeywordMatcher;
 use chrono::TimeZone;
-use outlook_pst::messaging::store::Store;
+use outlook_pst::ltp::prop_context::PropertyValue;
 use outlook_pst::messaging::folder::Folder;
 use outlook_pst::messaging::message::Message;
-use outlook_pst::ltp::prop_context::PropertyValue;
+use outlook_pst::messaging::store::Store;
 use outlook_pst::ndb::node_id::NodeId;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+pub mod conversation;
 pub mod csv;
 pub mod exporter;
 pub mod html;
 pub mod metadata;
 
 use exporter::MessageExporter;
+
+#[derive(Debug, Clone)]
+struct StagedExportRecord {
+    sequence_number: u32,
+    message_data: MessageData,
+    pst_store_name: String,
+    is_duplicate: bool,
+    matched_keywords: Vec<String>,
+    matched_emails: Vec<String>,
+}
 
 /// Extension trait for convenient value extraction from [`PropertyValue`].
 ///
@@ -148,6 +160,40 @@ fn build_folder_path(parent_path: Option<&str>, folder_name: &str) -> String {
     }
 }
 
+fn build_conversation_assignments(
+    staged_exports: &[StagedExportRecord],
+) -> std::collections::HashMap<u32, String> {
+    let mut main_candidates = Vec::new();
+    let mut duplicate_candidates = Vec::new();
+
+    for record in staged_exports {
+        let candidate = ConversationCandidate {
+            sequence_number: record.sequence_number,
+            conversation_id: record.message_data.conversation_id.clone(),
+            conversation_index: record.message_data.conversation_index.clone(),
+        };
+
+        if record.is_duplicate {
+            duplicate_candidates.push(candidate);
+        } else {
+            main_candidates.push(candidate);
+        }
+    }
+
+    // Conversation grouping must be scoped by output root (main vs duplicates)
+    // so every conv_XXXXX folder has at least two members in that root.
+    let mut assignments = assign_conversation_folders(&main_candidates);
+    assignments.extend(assign_conversation_folders(&duplicate_candidates));
+    assignments
+}
+
+fn conversation_number_from_folder(conversation_folder: Option<&str>) -> String {
+    conversation_folder
+        .and_then(|folder| folder.strip_prefix("conv_"))
+        .unwrap_or_default()
+        .to_string()
+}
+
 /// Export coordinator managing the overall export workflow
 #[derive(Debug)]
 pub struct ExportCoordinator {
@@ -165,21 +211,25 @@ pub struct ExportCoordinator {
     keyword_matcher: Option<KeywordMatcher>,
     /// Email matcher (if --emails flag enabled)
     email_matcher: Option<EmailMatcher>,
+    /// Export records staged before final path assignment and filesystem writes.
+    staged_exports: Vec<StagedExportRecord>,
 }
 
 impl ExportCoordinator {
     /// Create a new export coordinator
-    #[must_use] 
+    #[must_use]
     pub fn new(args: ExportArgs) -> Self {
         // Initialize keyword matcher if keywords provided
-        let keyword_matcher = args.keywords.as_ref().map(|kws| {
-            KeywordMatcher::new(kws.clone())
-        });
+        let keyword_matcher = args
+            .keywords
+            .as_ref()
+            .map(|kws| KeywordMatcher::new(kws.clone()));
 
         // Initialize email matcher if emails provided
-        let email_matcher = args.emails.as_ref().map(|emails| {
-            EmailMatcher::new(emails.clone())
-        });
+        let email_matcher = args
+            .emails
+            .as_ref()
+            .map(|emails| EmailMatcher::new(emails.clone()));
 
         Self {
             args,
@@ -189,6 +239,7 @@ impl ExportCoordinator {
             csv_exporter: None,
             keyword_matcher,
             email_matcher,
+            staged_exports: Vec::new(),
         }
     }
 
@@ -200,21 +251,21 @@ impl ExportCoordinator {
     }
 
     /// Format a sequence number as zero-padded 5-digit string (00001, 00002, etc.)
-    #[must_use] 
+    #[must_use]
     pub fn format_sequence(sequence: u32) -> String {
         format!("{sequence:05}")
     }
 
     /// Get output directory for a message (main or duplicates/)
-    #[must_use] 
+    #[must_use]
     pub fn get_message_output_dir(&self, sequence: u32, is_duplicate: bool) -> PathBuf {
         let seq_str = Self::format_sequence(sequence);
         let mut path = self.args.output.clone();
-        
+
         if is_duplicate {
             path.push("duplicates");
         }
-        
+
         path.push(seq_str);
         path
     }
@@ -285,13 +336,17 @@ impl ExportCoordinator {
                     }
                 }
             }
-            
+
             // Report summary of errors if any occurred
             if errors_encountered > 0 {
                 eprintln!();
-                eprintln!("⚠️  {errors_encountered} file(s) failed to process but export continued");
+                eprintln!(
+                    "⚠️  {errors_encountered} file(s) failed to process but export continued"
+                );
             }
         }
+
+        self.write_staged_exports(reporter);
 
         // Flush and close CSV if enabled
         if let Some(ref mut csv) = self.csv_exporter {
@@ -302,7 +357,17 @@ impl ExportCoordinator {
     }
 
     /// Export messages from a single PST file
-    fn export_pst_file(&mut self, pst_path: &std::path::Path, reporter: &mut ProgressReporter) -> Result<()> {
+    fn export_pst_file(
+        &mut self,
+        pst_path: &std::path::Path,
+        reporter: &mut ProgressReporter,
+    ) -> Result<()> {
+        let pst_store_name = pst_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default()
+            .to_string();
+
         // Open PST store
         let store = outlook_pst::open_store(pst_path).map_err(|e| {
             crate::error::Error::Other(anyhow::anyhow!(
@@ -326,24 +391,24 @@ impl ExportCoordinator {
 
         // Open the root folder
         let root_folder = store.open_folder(&ipm_entry_id).map_err(|e| {
-            crate::error::Error::Other(anyhow::anyhow!(
-                "Failed to open root folder: {e}"
-            ))
+            crate::error::Error::Other(anyhow::anyhow!("Failed to open root folder: {e}"))
         })?;
 
-        let exporter = MessageExporter::new(self.args.output.clone());
+        // Track staged messages before this PST.
+        let staged_before = self.staged_exports.len();
 
-        // Track messages exported before this PST
-        let messages_before = self.next_sequence - 1;
-
-        // Recursively export messages from all folders
-        self.export_folder_messages(&store, &root_folder, &exporter, reporter, None);
+        // Recursively collect messages from all folders.
+        self.export_folder_messages(&store, &root_folder, reporter, None, &pst_store_name);
 
         // Update total messages in reporter
-        let messages_exported = (self.next_sequence - 1) - messages_before;
+        let messages_exported = self.staged_exports.len() - staged_before;
         reporter.set_total_messages((self.next_sequence - 1) as usize);
 
-        eprintln!("✅ Exported {} messages from {}", messages_exported, pst_path.display());
+        eprintln!(
+            "✅ Exported {} messages from {}",
+            messages_exported,
+            pst_path.display()
+        );
 
         Ok(())
     }
@@ -354,9 +419,9 @@ impl ExportCoordinator {
         &mut self,
         store: &Rc<dyn Store>,
         folder: &Rc<dyn Folder>,
-        exporter: &exporter::MessageExporter,
         reporter: &mut ProgressReporter,
         parent_folder_path: Option<&str>,
+        pst_store_name: &str,
     ) {
         let folder_name = folder
             .properties()
@@ -382,7 +447,7 @@ impl ExportCoordinator {
                 match store.open_message(&entry_id, None) {
                     Ok(message) => {
                         let seq = self.next_sequence_number();
-                        
+
                         // Extract message data from PST message object
                         let message_data = extract_message_data(&message, &folder_path);
 
@@ -392,119 +457,68 @@ impl ExportCoordinator {
 
                         if should_export {
                             // Check for duplicates among exported messages
-                            let identifier = crate::duplicate::generate_message_identifier(&message_data);
-                            let (dup, _first_seq) = self.duplicate_tracker.check_and_record(&identifier, seq);
+                            let identifier =
+                                crate::duplicate::generate_message_identifier(&message_data);
+                            let (dup, _first_seq) =
+                                self.duplicate_tracker.check_and_record(&identifier, seq);
                             is_duplicate = dup;
 
                             if is_duplicate {
                                 self.duplicate_count += 1;
                                 reporter.record_duplicate();
                             }
-
-                            // Export the message (to main dir or duplicates/ dir)
-                            if let Err(e) = exporter.export_message(&message_data, seq, is_duplicate) {
-                                reporter.record_error();
-                                eprintln!(
-                                    "Warning: Failed to export message {seq}: {e}"
-                                );
-                                continue;
-                            }
                         } else {
                             reporter.record_draft_skipped();
                         }
 
                         // Perform keyword matching if enabled
-                        let matched_keywords: Vec<String> = if let Some(kw_matcher) = &self.keyword_matcher {
-                            let body = message_data.body_html.as_deref()
-                                .or(message_data.body_plain.as_deref());
-                            let kw_hits = kw_matcher.search_message(
-                                Some(&message_data.subject),
-                                body,
-                            );
-                            let mut kw_list: Vec<_> = kw_hits.into_iter().collect();
-                            kw_list.sort();
-                            kw_list
-                        } else {
-                            vec![]
-                        };
+                        let matched_keywords: Vec<String> =
+                            if let Some(kw_matcher) = &self.keyword_matcher {
+                                let body = message_data
+                                    .body_html
+                                    .as_deref()
+                                    .or(message_data.body_plain.as_deref());
+                                let kw_hits =
+                                    kw_matcher.search_message(Some(&message_data.subject), body);
+                                let mut kw_list: Vec<_> = kw_hits.into_iter().collect();
+                                kw_list.sort();
+                                kw_list
+                            } else {
+                                vec![]
+                            };
 
                         // Perform email matching if enabled
-                        let matched_emails: Vec<String> = if let Some(em_matcher) = &self.email_matcher {
-                            let em_hits = em_matcher.search_message(
-                                &message_data.from,
-                                &message_data.to,
-                                &message_data.cc,
-                                &message_data.bcc,
-                            );
-                            let mut em_list: Vec<_> = em_hits.into_iter().collect();
-                            em_list.sort();
-                            em_list
-                        } else {
-                            vec![]
-                        };
+                        let matched_emails: Vec<String> =
+                            if let Some(em_matcher) = &self.email_matcher {
+                                let em_hits = em_matcher.search_message(
+                                    &message_data.from,
+                                    &message_data.to,
+                                    &message_data.cc,
+                                    &message_data.bcc,
+                                );
+                                let mut em_list: Vec<_> = em_hits.into_iter().collect();
+                                em_list.sort();
+                                em_list
+                            } else {
+                                vec![]
+                            };
 
                         if should_export {
-                            // Export optional files based on CLI flags
-                            
-                            // Export metadata if requested
-                            if self.args.metadata {
-                                if let Err(e) = exporter.write_metadata(
-                                    &message_data,
-                                    seq,
-                                    is_duplicate,
-                                    &matched_keywords,
-                                    &matched_emails,
-                                ) {
-                                    eprintln!("Warning: Failed to export metadata for message {seq}: {e}");
-                                }
-                            }
-
-                            // Export attachments if requested
-                            if self.args.attachments {
-                                if let Err(e) = exporter.write_attachments(
-                                    &message_data,
-                                    seq,
-                                    is_duplicate,
-                                ) {
-                                    eprintln!("Warning: Failed to export attachments for message {seq}: {e}");
-                                }
-                            }
-
-                            // Export headers if requested
-                            if self.args.headers {
-                                if let Err(e) = exporter.write_headers(
-                                    &message_data,
-                                    seq,
-                                    is_duplicate,
-                                ) {
-                                    eprintln!("Warning: Failed to export headers for message {seq}: {e}");
-                                }
-                            }
-                        }
-
-                        // Write CSV row if CSV export is enabled
-                        if let Some(ref mut csv) = self.csv_exporter {
-                            let to_str = message_data.to.join("; ");
-                            let csv_row = CsvRow {
+                            self.staged_exports.push(StagedExportRecord {
                                 sequence_number: seq,
-                                subject: message_data.subject.clone(),
-                                from: message_data.from.clone(),
-                                to: to_str,
-                                date: message_data.date.clone(),
-                                message_id: message_data.message_id.clone().unwrap_or_default(),
+                                message_data,
+                                pst_store_name: pst_store_name.to_string(),
                                 is_duplicate,
-                                keyword_count: matched_keywords.len(),
-                                email_match_count: matched_emails.len(),
-                            };
-                            
-                            if let Err(e) = csv.write_row(&csv_row) {
-                                eprintln!("Warning: Failed to write CSV row for message {seq}: {e}");
-                            }
+                                matched_keywords,
+                                matched_emails,
+                            });
                         }
                     }
                     Err(e) => {
                         reporter.record_error();
-                        eprintln!("Warning: Failed to open message with entry ID {entry_id:?}: {e}");
+                        eprintln!(
+                            "Warning: Failed to open message with entry ID {entry_id:?}: {e}"
+                        );
                     }
                 }
             }
@@ -518,7 +532,7 @@ impl ExportCoordinator {
             for row in hierarchy_table.rows_matrix() {
                 // Get the NodeId from the row ID
                 let node_id = NodeId::from(u32::from(row.id()));
-                
+
                 // Convert to EntryId using store properties
                 if let Ok(entry_id) = store.properties().make_entry_id(node_id) {
                     subfolders.push(entry_id);
@@ -531,9 +545,117 @@ impl ExportCoordinator {
                     self.export_folder_messages(
                         store,
                         &subfolder,
-                        exporter,
                         reporter,
                         Some(folder_path.as_str()),
+                        pst_store_name,
+                    );
+                }
+            }
+        }
+    }
+
+    fn write_staged_exports(&mut self, reporter: &mut ProgressReporter) {
+        if self.staged_exports.is_empty() {
+            return;
+        }
+
+        let exporter = MessageExporter::new(self.args.output.clone());
+        let mut conversation_assignments = std::collections::HashMap::new();
+
+        if self.args.conversations {
+            conversation_assignments = build_conversation_assignments(&self.staged_exports);
+        }
+
+        for record in &self.staged_exports {
+            let conversation_folder = conversation_assignments
+                .get(&record.sequence_number)
+                .map(std::string::String::as_str);
+            let conv_number = conversation_number_from_folder(conversation_folder);
+            let mut error = 0_u8;
+
+            if let Err(e) = exporter.export_message(
+                &record.message_data,
+                record.sequence_number,
+                record.is_duplicate,
+                conversation_folder,
+            ) {
+                reporter.record_error();
+                error = 1;
+                eprintln!(
+                    "Warning: Failed to export message {}: {}",
+                    record.sequence_number, e
+                );
+            }
+
+            if self.args.metadata {
+                if let Err(e) = exporter.write_metadata(
+                    &record.message_data,
+                    record.sequence_number,
+                    record.is_duplicate,
+                    conversation_folder,
+                    &record.matched_keywords,
+                    &record.matched_emails,
+                ) {
+                    error = 1;
+                    eprintln!(
+                        "Warning: Failed to export metadata for message {}: {}",
+                        record.sequence_number, e
+                    );
+                }
+            }
+
+            if self.args.attachments {
+                if let Err(e) = exporter.write_attachments(
+                    &record.message_data,
+                    record.sequence_number,
+                    record.is_duplicate,
+                    conversation_folder,
+                ) {
+                    error = 1;
+                    eprintln!(
+                        "Warning: Failed to export attachments for message {}: {}",
+                        record.sequence_number, e
+                    );
+                }
+            }
+
+            if self.args.headers {
+                if let Err(e) = exporter.write_headers(
+                    &record.message_data,
+                    record.sequence_number,
+                    record.is_duplicate,
+                    conversation_folder,
+                ) {
+                    error = 1;
+                    eprintln!(
+                        "Warning: Failed to export headers for message {}: {}",
+                        record.sequence_number, e
+                    );
+                }
+            }
+
+            if let Some(ref mut csv) = self.csv_exporter {
+                let csv_row = CsvRow {
+                    sequence_number: record.sequence_number,
+                    subject: record.message_data.subject.clone(),
+                    from: record.message_data.from.clone(),
+                    to: record.message_data.to.join("; "),
+                    date: record.message_data.date.clone(),
+                    message_id: record.message_data.message_id.clone().unwrap_or_default(),
+                    is_duplicate: record.is_duplicate,
+                    keyword_count: record.matched_keywords.len(),
+                    email_match_count: record.matched_emails.len(),
+                    size: record.message_data.size_bytes.unwrap_or(0),
+                    attachment_count: record.message_data.attachments.len(),
+                    conv_number,
+                    pst_store_name: record.pst_store_name.clone(),
+                    error,
+                };
+
+                if let Err(e) = csv.write_row(&csv_row) {
+                    eprintln!(
+                        "Warning: Failed to write CSV row for message {}: {}",
+                        record.sequence_number, e
                     );
                 }
             }
@@ -542,17 +664,26 @@ impl ExportCoordinator {
 }
 
 /// Extract message data from a PST message object into our export format
-#[allow(clippy::unreadable_literal, clippy::similar_names, clippy::cast_sign_loss)]
+#[allow(
+    clippy::unreadable_literal,
+    clippy::similar_names,
+    clippy::cast_sign_loss,
+    clippy::too_many_lines
+)]
 fn extract_message_data(message: &Rc<dyn Message>, folder_path: &str) -> MessageData {
     let props = message.properties();
 
     // Extract message flags value (0x0E07 - PidTagMessageFlags)
     // mfUnsent is bit 0x00000008
-    let flags_val = props.get(0x0E07).and_then(PropertyValueExt::as_i32).unwrap_or(0);
+    let flags_val = props
+        .get(0x0E07)
+        .and_then(PropertyValueExt::as_i32)
+        .unwrap_or(0);
     let is_draft = flags_val & 0x00000008 != 0;
-    
+
     // Extract subject
-    let mut subject = props.get(0x0037)  // PidTagSubject
+    let mut subject = props
+        .get(0x0037) // PidTagSubject
         .and_then(PropertyValueExt::as_string)
         .unwrap_or_else(|| "(No Subject)".to_string());
 
@@ -562,19 +693,38 @@ fn extract_message_data(message: &Rc<dyn Message>, folder_path: &str) -> Message
 
     // Extract sender: display name (0x0C1A) + SMTP address (0x5D01 → 0x5D0A → 0x0C1F fallback)
     let sender_name = props.get(0x0C1A).and_then(PropertyValueExt::as_string); // PidTagSenderName
-    let sender_smtp = props.get(0x5D01).and_then(PropertyValueExt::as_string) // PidTagSenderSmtpAddress
+    let sender_smtp = props
+        .get(0x5D01)
+        .and_then(PropertyValueExt::as_string) // PidTagSenderSmtpAddress
         .filter(|s| is_smtp_address(s))
-        .or_else(|| props.get(0x5D0A).and_then(PropertyValueExt::as_string) // PidTagCreatorSmtpAddress (sender)
-            .filter(|s| is_smtp_address(s)))
-        .or_else(|| props.get(0x0C1F).and_then(PropertyValueExt::as_string) // PidTagSenderEmailAddress
-            .filter(|s| is_smtp_address(s)));
+        .or_else(|| {
+            props
+                .get(0x5D0A)
+                .and_then(PropertyValueExt::as_string) // PidTagCreatorSmtpAddress (sender)
+                .filter(|s| is_smtp_address(s))
+        })
+        .or_else(|| {
+            props
+                .get(0x0C1F)
+                .and_then(PropertyValueExt::as_string) // PidTagSenderEmailAddress
+                .filter(|s| is_smtp_address(s))
+        });
     let from = format_email_field(sender_name.as_deref(), sender_smtp.as_deref());
 
     // Extract message ID
     let message_id = props.get(0x1035).and_then(PropertyValueExt::as_string); // PidTagInternetMessageId
 
+    // Extract conversation fields
+    let conversation_id = props
+        .get(0x3013) // PidTagConversationId
+        .and_then(PropertyValueExt::as_binary);
+    let conversation_index = props
+        .get(0x0071) // PidTagConversationIndex
+        .and_then(PropertyValueExt::as_binary);
+
     // Extract date
-    let date = props.get(0x0E06)  // PidTagMessageDeliveryTime
+    let date = props
+        .get(0x0E06) // PidTagMessageDeliveryTime
         .and_then(|prop| match prop {
             PropertyValue::Time(t) => filetime_to_rfc3339(*t),
             _ => None,
@@ -582,7 +732,9 @@ fn extract_message_data(message: &Rc<dyn Message>, folder_path: &str) -> Message
         .unwrap_or_else(|| "Unknown".to_string());
 
     // Extract body (HTML > RTF > Plain text)
-    let body_html = props.get(0x1013).and_then(PropertyValueExt::as_string_or_binary_utf8); // PidTagHtmlBody
+    let body_html = props
+        .get(0x1013)
+        .and_then(PropertyValueExt::as_string_or_binary_utf8); // PidTagHtmlBody
     let body_rtf = props.get(0x1009).and_then(PropertyValueExt::as_binary); // PidTagRtfCompressed
     let body_plain = props.get(0x1000).and_then(PropertyValueExt::as_string); // PidTagBody
 
@@ -590,7 +742,8 @@ fn extract_message_data(message: &Rc<dyn Message>, folder_path: &str) -> Message
     let headers = props.get(0x007D).and_then(PropertyValueExt::as_string); // PidTagTransportMessageHeaders
 
     // Extract message size
-    let size_bytes = props.get(0x0E08) // PidTagMessageSize
+    let size_bytes = props
+        .get(0x0E08) // PidTagMessageSize
         .and_then(PropertyValueExt::as_i32)
         .map(|i| i as u64);
 
@@ -652,6 +805,8 @@ fn extract_message_data(message: &Rc<dyn Message>, folder_path: &str) -> Message
         flags,
         is_draft,
         folder_path: folder_path.to_string(),
+        conversation_id,
+        conversation_index,
     }
 }
 
@@ -665,7 +820,10 @@ fn is_smtp_address(addr: &str) -> bool {
 /// Format an email field as "Display Name <email@address>" when both parts
 /// are available. Falls back to whichever part is present, or "unknown".
 fn format_email_field(display_name: Option<&str>, email_address: Option<&str>) -> String {
-    match (display_name.filter(|s| !s.is_empty()), email_address.filter(|s| is_smtp_address(s))) {
+    match (
+        display_name.filter(|s| !s.is_empty()),
+        email_address.filter(|s| is_smtp_address(s)),
+    ) {
         (Some(name), Some(addr)) => {
             // Don't duplicate if name is already the email address
             if name.eq_ignore_ascii_case(addr) {
@@ -706,10 +864,14 @@ fn extract_recipients(
 
                     if let Ok(value) = recipient_table.read_column(col_value, col.prop_type()) {
                         match prop_id {
-                            0x3001 => display_name = value.as_string(),          // PidTagDisplayName
-                            0x39FE => smtp_address = value.as_string(),          // PidTagSmtpAddress
-                            0x3003 => email_address = value.as_string(),         // PidTagEmailAddress
-                            0x0C15 => if let Some(v) = value.as_i32() { recipient_type = v; },
+                            0x3001 => display_name = value.as_string(), // PidTagDisplayName
+                            0x39FE => smtp_address = value.as_string(), // PidTagSmtpAddress
+                            0x3003 => email_address = value.as_string(), // PidTagEmailAddress
+                            0x0C15 => {
+                                if let Some(v) = value.as_i32() {
+                                    recipient_type = v;
+                                }
+                            }
                             _ => {}
                         }
                     }
@@ -720,10 +882,7 @@ fn extract_recipients(
             let addr = smtp_address
                 .filter(|s| is_smtp_address(s))
                 .or_else(|| email_address.filter(|s| is_smtp_address(s)));
-            let formatted = format_email_field(
-                display_name.as_deref(),
-                addr.as_deref(),
-            );
+            let formatted = format_email_field(display_name.as_deref(), addr.as_deref());
 
             match recipient_type {
                 2 => cc.push(formatted),
@@ -813,6 +972,24 @@ fn extract_attachments(
 mod tests {
     use super::*;
 
+    fn make_staged_record(
+        sequence_number: u32,
+        is_duplicate: bool,
+        conversation_id: Option<Vec<u8>>,
+    ) -> StagedExportRecord {
+        let mut message_data = MessageData::example();
+        message_data.conversation_id = conversation_id;
+
+        StagedExportRecord {
+            sequence_number,
+            message_data,
+            pst_store_name: "example.pst".to_string(),
+            is_duplicate,
+            matched_keywords: Vec::new(),
+            matched_emails: Vec::new(),
+        }
+    }
+
     #[test]
     fn test_sequence_formatting() {
         assert_eq!(ExportCoordinator::format_sequence(1), "00001");
@@ -830,6 +1007,7 @@ mod tests {
             headers: false,
             csv: false,
             drafts: false,
+            conversations: false,
             keywords: None,
             emails: None,
         };
@@ -852,13 +1030,21 @@ mod tests {
             0xFF, 0xFE, b'<', 0x00, b'p', 0x00, b'>', 0x00, b'H', 0x00, b'i', 0x00, b'<', 0x00,
             b'/', 0x00, b'p', 0x00, b'>', 0x00,
         ];
-        assert_eq!(decode_html_binary(&html_utf16le), Some("<p>Hi</p>".to_string()));
+        assert_eq!(
+            decode_html_binary(&html_utf16le),
+            Some("<p>Hi</p>".to_string())
+        );
     }
 
     #[test]
     fn test_decode_html_binary_windows_1252_fallback() {
-        let html_cp1252 = [b'<', b'p', b'>', b'R', 0xE9, b's', b'u', b'm', 0xE9, b'<', b'/', b'p', b'>'];
-        assert_eq!(decode_html_binary(&html_cp1252), Some("<p>Résumé</p>".to_string()));
+        let html_cp1252 = [
+            b'<', b'p', b'>', b'R', 0xE9, b's', b'u', b'm', 0xE9, b'<', b'/', b'p', b'>',
+        ];
+        assert_eq!(
+            decode_html_binary(&html_cp1252),
+            Some("<p>Résumé</p>".to_string())
+        );
     }
 
     #[test]
@@ -892,5 +1078,29 @@ mod tests {
             filetime_to_rfc3339(filetime),
             Some("1970-01-01T00:00:00+00:00".to_string())
         );
+    }
+
+    #[test]
+    fn test_conversation_assignments_are_scoped_per_output_root() {
+        let records = vec![
+            make_staged_record(1, false, Some(b"thread-a-id-----".to_vec())),
+            make_staged_record(2, true, Some(b"thread-a-id-----".to_vec())),
+            make_staged_record(3, false, Some(b"thread-b-id-----".to_vec())),
+            make_staged_record(4, false, Some(b"thread-b-id-----".to_vec())),
+            make_staged_record(5, true, Some(b"thread-c-id-----".to_vec())),
+            make_staged_record(6, true, Some(b"thread-c-id-----".to_vec())),
+        ];
+
+        let assignments = build_conversation_assignments(&records);
+
+        // Cross-root singleton members must not get a conversation folder.
+        assert_eq!(assignments.get(&1), None);
+        assert_eq!(assignments.get(&2), None);
+
+        // Per-root multi-message groups are eligible.
+        assert!(assignments.contains_key(&3));
+        assert!(assignments.contains_key(&4));
+        assert!(assignments.contains_key(&5));
+        assert!(assignments.contains_key(&6));
     }
 }

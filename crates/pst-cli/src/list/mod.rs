@@ -2,8 +2,8 @@
 
 use crate::cli::ListArgs;
 use crate::error::Result;
-use outlook_pst::messaging::store::Store;
 use outlook_pst::messaging::folder::Folder;
+use outlook_pst::messaging::store::Store;
 use outlook_pst::ndb::node_id::NodeId;
 use std::rc::Rc;
 
@@ -16,7 +16,7 @@ pub struct ListCommand {
 
 impl ListCommand {
     /// Create a new list command
-    #[must_use] 
+    #[must_use]
     pub fn new(args: ListArgs) -> Self {
         Self { args }
     }
@@ -34,9 +34,7 @@ impl ListCommand {
 
         // Open PST store
         let store = outlook_pst::open_store(&self.args.pst_file).map_err(|e| {
-            crate::error::Error::Other(anyhow::anyhow!(
-                "Failed to open PST file: {e}"
-            ))
+            crate::error::Error::Other(anyhow::anyhow!("Failed to open PST file: {e}"))
         })?;
 
         // Get properties to verify it's a valid store
@@ -54,12 +52,7 @@ impl ListCommand {
             Ok(entry_id) => {
                 if let Ok(root_folder) = store.open_folder(&entry_id) {
                     let mut total_messages = 0;
-                    Self::list_folder_recursive(
-                        &store,
-                        &root_folder,
-                        "",
-                        &mut total_messages,
-                    );
+                    Self::list_folder_recursive(&store, &root_folder, "", &mut total_messages);
                     println!("\n✅ Total messages in PST: {total_messages}\n");
                 } else {
                     println!("⚠️  Could not open root folder\n");
@@ -106,7 +99,7 @@ impl ListCommand {
             for row in hierarchy_table.rows_matrix() {
                 // Get the NodeId from the row ID
                 let node_id = NodeId::from(u32::from(row.id()));
-                
+
                 // Convert to EntryId using store properties
                 if let Ok(entry_id) = store.properties().make_entry_id(node_id) {
                     subfolders.push(entry_id);

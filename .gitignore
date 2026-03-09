@@ -22,3 +22,22 @@ Cargo.lock
 
 .vscode/
 .vs/
+*.pst
+
+# Rust build artifacts and logs
+release/
+*.rlib
+*.prof*
+*.log
+
+# Local environment files
+.env*
+
+# OS/editor temp files
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+
+# IDE metadata
+.idea/

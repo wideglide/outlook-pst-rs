@@ -2,11 +2,11 @@
 //!
 //! Handles reading PST message data and writing exported HTML files.
 
+use super::html::convert_to_html;
+use super::metadata::{format_metadata, sanitize_filename};
 use crate::error::Result;
 use std::fs;
 use std::path::PathBuf;
-use super::html::convert_to_html;
-use super::metadata::{format_metadata, sanitize_filename};
 
 /// Represents a message to be exported
 #[derive(Debug, Clone)]
@@ -43,6 +43,10 @@ pub struct MessageData {
     pub flags: Vec<String>,
     /// Whether this message is a draft/unsent item
     pub is_draft: bool,
+    /// Canonical conversation id (`PidTagConversationId`, 16 bytes) when present
+    pub conversation_id: Option<Vec<u8>>,
+    /// Raw conversation index bytes (`PidTagConversationIndex`) when present
+    pub conversation_index: Option<Vec<u8>>,
 }
 
 /// Represents an email attachment
@@ -59,6 +63,7 @@ pub struct Attachment {
 impl MessageData {
     /// Create an example message for testing
     #[cfg(test)]
+    #[must_use]
     pub fn example() -> Self {
         Self {
             subject: "Test Message".to_string(),
@@ -77,6 +82,8 @@ impl MessageData {
             size_bytes: Some(1024),
             flags: vec![],
             is_draft: false,
+            conversation_id: None,
+            conversation_index: None,
         }
     }
 }
@@ -89,7 +96,7 @@ pub struct MessageExporter {
 
 impl MessageExporter {
     /// Create a new message exporter
-    #[must_use] 
+    #[must_use]
     pub fn new(output_dir: PathBuf) -> Self {
         Self { output_dir }
     }
@@ -105,22 +112,15 @@ impl MessageExporter {
         message: &MessageData,
         sequence_number: u32,
         is_duplicate: bool,
+        conversation_folder: Option<&str>,
     ) -> Result<PathBuf> {
-        // Create numbered subdirectory (in duplicates/ if duplicate)
-        let seq_str = format!("{sequence_number:05}");
-        let message_dir = if is_duplicate {
-            self.output_dir.join("duplicates").join(&seq_str)
-        } else {
-            self.output_dir.join(&seq_str)
-        };
+        let message_dir = self.message_dir(sequence_number, is_duplicate, conversation_folder);
 
         // Create directory
         fs::create_dir_all(&message_dir).map_err(|_e| {
-            crate::error::Error::Export(
-                crate::error::ExportError::OutputConflict(
-                    message_dir.clone(),
-                ),
-            )
+            crate::error::Error::Export(crate::error::ExportError::OutputConflict(
+                message_dir.clone(),
+            ))
         })?;
 
         // Convert body to HTML
@@ -140,12 +140,10 @@ impl MessageExporter {
         // Write message.html file
         let html_path = message_dir.join("message.html");
         fs::write(&html_path, html_content).map_err(|e| {
-            crate::error::Error::Export(
-                crate::error::ExportError::MessageFailed(
-                    sequence_number,
-                    format!("Failed to write message.html: {e}"),
-                ),
-            )
+            crate::error::Error::Export(crate::error::ExportError::MessageFailed(
+                sequence_number,
+                format!("Failed to write message.html: {e}"),
+            ))
         })?;
 
         Ok(html_path)
@@ -161,25 +159,21 @@ impl MessageExporter {
         message: &MessageData,
         sequence_number: u32,
         is_duplicate: bool,
+        conversation_folder: Option<&str>,
         keywords_found: &[String],
         emails_found: &[String],
     ) -> Result<()> {
-        let seq_str = format!("{sequence_number:05}");
-        let metadata_path = if is_duplicate {
-            self.output_dir.join("duplicates").join(&seq_str).join("metadata.txt")
-        } else {
-            self.output_dir.join(&seq_str).join("metadata.txt")
-        };
+        let metadata_path = self
+            .message_dir(sequence_number, is_duplicate, conversation_folder)
+            .join("metadata.txt");
 
         let metadata_content = format_metadata(message, keywords_found, emails_found);
 
         fs::write(&metadata_path, metadata_content).map_err(|e| {
-            crate::error::Error::Export(
-                crate::error::ExportError::MessageFailed(
-                    sequence_number,
-                    format!("Failed to write metadata: {e}"),
-                ),
-            )
+            crate::error::Error::Export(crate::error::ExportError::MessageFailed(
+                sequence_number,
+                format!("Failed to write metadata: {e}"),
+            ))
         })?;
 
         Ok(())
@@ -195,20 +189,17 @@ impl MessageExporter {
         message: &MessageData,
         sequence_number: u32,
         is_duplicate: bool,
+        conversation_folder: Option<&str>,
     ) -> Result<()> {
         if message.attachments.is_empty() {
             return Ok(());
         }
 
-        let seq_str = format!("{sequence_number:05}");
-        let message_dir = if is_duplicate {
-            self.output_dir.join("duplicates").join(&seq_str)
-        } else {
-            self.output_dir.join(&seq_str)
-        };
+        let message_dir = self.message_dir(sequence_number, is_duplicate, conversation_folder);
 
         // Track filename collisions
-        let mut used_filenames: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+        let mut used_filenames: std::collections::HashMap<String, u32> =
+            std::collections::HashMap::new();
 
         for attachment in &message.attachments {
             let mut filename = sanitize_filename(&attachment.filename);
@@ -229,12 +220,10 @@ impl MessageExporter {
             // Write attachment file
             let attachment_path = message_dir.join(&filename);
             fs::write(&attachment_path, &attachment.data).map_err(|e| {
-                crate::error::Error::Export(
-                    crate::error::ExportError::MessageFailed(
-                        sequence_number,
-                        format!("Failed to write attachment {filename}: {e}"),
-                    ),
-                )
+                crate::error::Error::Export(crate::error::ExportError::MessageFailed(
+                    sequence_number,
+                    format!("Failed to write attachment {filename}: {e}"),
+                ))
             })?;
         }
 
@@ -251,26 +240,43 @@ impl MessageExporter {
         message: &MessageData,
         sequence_number: u32,
         is_duplicate: bool,
+        conversation_folder: Option<&str>,
     ) -> Result<()> {
-        let seq_str = format!("{sequence_number:05}");
-        let headers_path = if is_duplicate {
-            self.output_dir.join("duplicates").join(&seq_str).join("headers.txt")
-        } else {
-            self.output_dir.join(&seq_str).join("headers.txt")
-        };
+        let headers_path = self
+            .message_dir(sequence_number, is_duplicate, conversation_folder)
+            .join("headers.txt");
 
         let headers_content = message.headers.as_deref().unwrap_or("No headers available");
 
         fs::write(&headers_path, headers_content).map_err(|e| {
-            crate::error::Error::Export(
-                crate::error::ExportError::MessageFailed(
-                    sequence_number,
-                    format!("Failed to write headers: {e}"),
-                ),
-            )
+            crate::error::Error::Export(crate::error::ExportError::MessageFailed(
+                sequence_number,
+                format!("Failed to write headers: {e}"),
+            ))
         })?;
 
         Ok(())
+    }
+
+    fn message_dir(
+        &self,
+        sequence_number: u32,
+        is_duplicate: bool,
+        conversation_folder: Option<&str>,
+    ) -> PathBuf {
+        let seq_str = format!("{sequence_number:05}");
+        let mut dir = self.output_dir.clone();
+
+        if is_duplicate {
+            dir.push("duplicates");
+        }
+
+        if let Some(folder) = conversation_folder {
+            dir.push(folder);
+        }
+
+        dir.push(seq_str);
+        dir
     }
 }
 
@@ -283,16 +289,32 @@ fn inject_message_header(html: &str, message: &MessageData) -> String {
         r#"<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;border-bottom:1px solid #ccc;padding-bottom:8px;margin-bottom:12px;">"#,
     );
 
-    let _ = writeln!(header, "<b>Subject:</b> {}<br>", encode_text(&message.subject));
+    let _ = writeln!(
+        header,
+        "<b>Subject:</b> {}<br>",
+        encode_text(&message.subject)
+    );
     let _ = writeln!(header, "<b>From:</b> {}<br>", encode_text(&message.from));
     let _ = writeln!(header, "<b>Date:</b> {}<br>", encode_text(&message.date));
-    let _ = writeln!(header, "<b>To:</b> {}<br>", encode_text(&message.to.join("; ")));
+    let _ = writeln!(
+        header,
+        "<b>To:</b> {}<br>",
+        encode_text(&message.to.join("; "))
+    );
 
     if !message.cc.is_empty() {
-        let _ = writeln!(header, "<b>CC:</b> {}<br>", encode_text(&message.cc.join("; ")));
+        let _ = writeln!(
+            header,
+            "<b>CC:</b> {}<br>",
+            encode_text(&message.cc.join("; "))
+        );
     }
     if !message.bcc.is_empty() {
-        let _ = writeln!(header, "<b>BCC:</b> {}<br>", encode_text(&message.bcc.join("; ")));
+        let _ = writeln!(
+            header,
+            "<b>BCC:</b> {}<br>",
+            encode_text(&message.bcc.join("; "))
+        );
     }
 
     header.push_str("</div>\n");
@@ -330,7 +352,7 @@ mod tests {
         let exporter = MessageExporter::new(temp_dir.path().to_path_buf());
         let message = MessageData::example();
 
-        let result = exporter.export_message(&message, 1, false);
+        let result = exporter.export_message(&message, 1, false, None);
         assert!(result.is_ok());
 
         let message_dir = temp_dir.path().join("00001");
@@ -343,7 +365,7 @@ mod tests {
         let exporter = MessageExporter::new(temp_dir.path().to_path_buf());
         let message = MessageData::example();
 
-        exporter.export_message(&message, 1, false).unwrap();
+        exporter.export_message(&message, 1, false, None).unwrap();
 
         let html_path = temp_dir.path().join("00001").join("message.html");
         assert!(html_path.exists());
@@ -358,9 +380,16 @@ mod tests {
         let exporter = MessageExporter::new(temp_dir.path().to_path_buf());
         let message = MessageData::example();
 
-        exporter.export_message(&message, 1, false).unwrap();
+        exporter.export_message(&message, 1, false, None).unwrap();
         exporter
-            .write_metadata(&message, 1, false, &["keyword1".to_string()], &["test@example.com".to_string()])
+            .write_metadata(
+                &message,
+                1,
+                false,
+                None,
+                &["keyword1".to_string()],
+                &["test@example.com".to_string()],
+            )
             .unwrap();
 
         let metadata_path = temp_dir.path().join("00001").join("metadata.txt");

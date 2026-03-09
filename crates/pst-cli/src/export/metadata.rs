@@ -2,14 +2,14 @@
 //!
 //! Handles extracting and formatting message metadata to metadata.txt files.
 
-use crate::export::exporter::MessageData;
 use crate::error::Result;
+use crate::export::exporter::MessageData;
 use std::fmt::Write;
 use std::fs;
 use std::path::Path;
 
 /// Extract and format metadata from a message
-#[must_use] 
+#[must_use]
 pub fn format_metadata(
     message: &MessageData,
     keywords_found: &[String],
@@ -53,6 +53,16 @@ pub fn format_metadata(
         "Message-ID: {}",
         message.message_id.as_deref().unwrap_or("N/A")
     );
+
+    if let Some(conversation_id) = &message.conversation_id {
+        let hex_id = encode_hex_lower(conversation_id);
+        let _ = writeln!(output, "ConversationId: {hex_id}");
+    }
+
+    if let Some(conversation_index) = &message.conversation_index {
+        let hex_index = encode_hex_lower(conversation_index);
+        let _ = writeln!(output, "ConversationIndex: {hex_index}");
+    }
 
     // Folder
     let _ = writeln!(output, "Folder: {}", message.folder_path);
@@ -105,31 +115,34 @@ pub fn format_metadata(
     output
 }
 
+fn encode_hex_lower(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        let _ = write!(&mut out, "{byte:02x}");
+    }
+    out
+}
+
 /// Write metadata file to disk
 ///
 /// # Errors
 ///
 /// Returns an error if the file cannot be written to disk.
-pub fn write_metadata_file(
-    output_path: &Path,
-    metadata_content: &str,
-) -> Result<()> {
+pub fn write_metadata_file(output_path: &Path, metadata_content: &str) -> Result<()> {
     fs::write(output_path, metadata_content).map_err(|e| {
-        crate::error::Error::Export(
-            crate::error::ExportError::MessageFailed(
-                0,
-                format!("Failed to write metadata.txt: {e}"),
-            ),
-        )
+        crate::error::Error::Export(crate::error::ExportError::MessageFailed(
+            0,
+            format!("Failed to write metadata.txt: {e}"),
+        ))
     })
 }
 
 /// Sanitize filename for filesystem safety
 /// Replaces unsafe characters with underscores
-#[must_use] 
+#[must_use]
 pub fn sanitize_filename(filename: &str) -> String {
     let mut sanitized = String::new();
-    
+
     for ch in filename.chars() {
         match ch {
             // Unsafe filesystem characters

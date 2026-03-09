@@ -36,9 +36,7 @@ fn test_list_command_output_format() {
     }
 
     // Use the ListCommand directly
-    let args = pst_cli::cli::ListArgs {
-        pst_file: pst_path,
-    };
+    let args = pst_cli::cli::ListArgs { pst_file: pst_path };
     let cmd = pst_cli::list::ListCommand::new(args);
     let result = cmd.run();
     assert!(result.is_ok(), "List should succeed: {:?}", result.err());
@@ -55,7 +53,7 @@ fn test_list_command_shows_folder_names() {
     // Capture output by running command via binary
     let binary = get_binary_path();
     if !binary.exists() {
-        eprintln!("Skipping test: binary not built yet at {:?}", binary);
+        eprintln!("Skipping test: binary not built yet at {binary:?}");
         return;
     }
 
@@ -65,15 +63,24 @@ fn test_list_command_shows_folder_names() {
         .expect("Failed to execute pst-cli list");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Should contain PST file info
-    assert!(stdout.contains("PST File:"), "Output should mention PST File");
-    
+    assert!(
+        stdout.contains("PST File:"),
+        "Output should mention PST File"
+    );
+
     // Should contain message count info
-    assert!(stdout.contains("messages"), "Output should reference message counts");
-    
+    assert!(
+        stdout.contains("messages"),
+        "Output should reference message counts"
+    );
+
     // Should contain total
-    assert!(stdout.contains("Total messages"), "Output should show total message count");
+    assert!(
+        stdout.contains("Total messages"),
+        "Output should show total message count"
+    );
 }
 
 #[test]

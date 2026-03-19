@@ -4,9 +4,16 @@
 //! 1. HTML body (direct use)
 //! 2. RTF body (decompress and convert to HTML)
 //! 3. Plain text body (wrap with basic HTML formatting)
+//!
+//! Also provides parse-based visible-text extraction (for keyword filtering)
+//! and inline-reference rewriting (for exported `message.html` files) via
+//! `lol_html`.
 
 use crate::error::Result;
+use crate::export::exporter::AttachmentExportPlanEntry;
 use encoding_rs::Encoding;
+use lol_html::{element, text, HtmlRewriter, Settings};
+use std::collections::HashMap;
 
 /// Convert email body content to HTML
 ///
@@ -56,14 +63,56 @@ fn wrap_html_body(html: &str, _charset: Option<&str>) -> Result<String> {
     // Check if already wrapped in html tags
     let html_trimmed = html.trim();
     if html_trimmed.starts_with("<html") || html_trimmed.starts_with("<!DOCTYPE") {
-        // Already properly structured HTML
-        Ok(html.to_string())
+        // Already properly structured HTML — normalize charset to UTF-8
+        // so browsers don't misinterpret the (already UTF-8) Rust string.
+        Ok(normalize_charset_to_utf8(html))
     } else {
         // Wrap in basic HTML structure
         Ok(format!(
             r#"<html><head><meta charset="utf-8"></head><body>{html}</body></html>"#
         ))
     }
+}
+
+/// Rewrite charset declarations in existing HTML to UTF-8.
+///
+/// Handles both forms:
+/// - `<meta charset="...">`
+/// - `<meta http-equiv="Content-Type" content="text/html; charset=...">`
+///
+/// Since Rust strings are always valid UTF-8, the in-memory content is
+/// already UTF-8 regardless of what the original email declared. This
+/// prevents browsers from misinterpreting the bytes.
+fn normalize_charset_to_utf8(html: &str) -> String {
+    let mut output = Vec::with_capacity(html.len());
+
+    let mut rewriter = HtmlRewriter::new(
+        Settings {
+            element_content_handlers: vec![element!("meta", |el| {
+                // <meta charset="...">
+                if el.get_attribute("charset").is_some() {
+                    el.set_attribute("charset", "utf-8").ok();
+                }
+                // <meta http-equiv="Content-Type" content="text/html; charset=...">
+                if let Some(http_equiv) = el.get_attribute("http-equiv") {
+                    if http_equiv.eq_ignore_ascii_case("Content-Type") {
+                        el.set_attribute("content", "text/html; charset=utf-8")
+                            .ok();
+                    }
+                }
+                Ok(())
+            })],
+            ..Settings::new()
+        },
+        |chunk: &[u8]| {
+            output.extend_from_slice(chunk);
+        },
+    );
+
+    let _ = rewriter.write(html.as_bytes());
+    let _ = rewriter.end();
+
+    String::from_utf8(output).unwrap_or_else(|_| html.to_string())
 }
 
 /// Convert RTF body to HTML
@@ -220,6 +269,230 @@ fn encode_to_utf8(text: &str, charset: Option<&str>) -> String {
         }
         _ => text.to_string(),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Visible-text extraction (for keyword filtering on HTML bodies)
+// ---------------------------------------------------------------------------
+
+/// Extract user-visible text from an HTML string, excluding tag markup,
+/// comments, `<script>`, and `<style>` content.
+///
+/// The returned string preserves text-node ordering and inserts spaces
+/// between blocks so substring keyword matching works naturally.
+pub fn extract_visible_text(html: &str) -> String {
+    // Two-pass approach: first strip <script> and <style> elements completely,
+    // then collect text nodes from the remaining HTML.
+    let stripped = strip_hidden_elements(html);
+    collect_text_nodes(&stripped)
+}
+
+/// Remove `<script>` and `<style>` elements (including content) from HTML.
+fn strip_hidden_elements(html: &str) -> String {
+    let mut output = Vec::with_capacity(html.len());
+
+    let mut rewriter = HtmlRewriter::new(
+        Settings {
+            element_content_handlers: vec![element!("script, style", |el| {
+                el.remove();
+                Ok(())
+            })],
+            ..Settings::new()
+        },
+        |chunk: &[u8]| {
+            output.extend_from_slice(chunk);
+        },
+    );
+
+    let _ = rewriter.write(html.as_bytes());
+    let _ = rewriter.end();
+
+    String::from_utf8(output).unwrap_or_else(|_| html.to_string())
+}
+
+/// Collect all text nodes from HTML, joining with spaces.
+fn collect_text_nodes(html: &str) -> String {
+    let mut visible = String::with_capacity(html.len() / 2);
+
+    let mut rewriter = HtmlRewriter::new(
+        Settings {
+            element_content_handlers: vec![text!("*", |t| {
+                let chunk = t.as_str();
+                if !chunk.trim().is_empty() {
+                    if !visible.is_empty() && !visible.ends_with(' ') {
+                        visible.push(' ');
+                    }
+                    visible.push_str(chunk);
+                }
+                Ok(())
+            })],
+            ..Settings::new()
+        },
+        |_output: &[u8]| {},
+    );
+
+    let _ = rewriter.write(html.as_bytes());
+    let _ = rewriter.end();
+
+    visible
+}
+
+// ---------------------------------------------------------------------------
+// Inline-reference rewriting (for exported message.html)
+// ---------------------------------------------------------------------------
+
+/// Classify an attribute value as an inline reference kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InlineReferenceKind {
+    /// `cid:` reference.
+    Cid,
+    /// Content-location based reference.
+    ContentLocation,
+    /// External URL, anchor, or other non-inline reference.
+    Other,
+}
+
+/// Classify a URL-valued attribute as a `cid:` reference, a potential
+/// content-location reference, or something else (external / anchor).
+pub fn classify_reference(value: &str) -> InlineReferenceKind {
+    let trimmed = value.trim();
+    if trimmed.to_ascii_lowercase().starts_with("cid:") {
+        return InlineReferenceKind::Cid;
+    }
+    // External URLs and anchors are "Other"
+    if trimmed.starts_with("http://")
+        || trimmed.starts_with("https://")
+        || trimmed.starts_with("mailto:")
+        || trimmed.starts_with('#')
+        || trimmed.starts_with("data:")
+    {
+        return InlineReferenceKind::Other;
+    }
+    // Any remaining non-empty value could be a content-location reference.
+    if !trimmed.is_empty() {
+        return InlineReferenceKind::ContentLocation;
+    }
+    InlineReferenceKind::Other
+}
+
+/// Normalize a `cid:` reference value into a lookup key that matches our
+/// attachment plan's `content_id_keys`.
+pub fn normalize_cid_key(value: &str) -> String {
+    value
+        .trim()
+        .trim_start_matches("cid:")
+        .trim_start_matches("CID:")
+        .trim()
+        .trim_start_matches('<')
+        .trim_end_matches('>')
+        .to_lowercase()
+}
+
+/// Normalize a content-location reference value into a lookup key.
+pub fn normalize_content_location_key(value: &str) -> String {
+    value.trim().to_lowercase()
+}
+
+/// Build lookup maps from an attachment export plan for fast reference resolution.
+fn build_lookup_maps(
+    plan_entries: &[AttachmentExportPlanEntry],
+) -> (HashMap<String, Vec<usize>>, HashMap<String, Vec<usize>>) {
+    let mut cid_map: HashMap<String, Vec<usize>> = HashMap::new();
+    let mut loc_map: HashMap<String, Vec<usize>> = HashMap::new();
+
+    for (i, entry) in plan_entries.iter().enumerate() {
+        for key in &entry.content_id_keys {
+            cid_map.entry(key.clone()).or_default().push(i);
+        }
+        for key in &entry.content_location_keys {
+            loc_map.entry(key.clone()).or_default().push(i);
+        }
+    }
+
+    (cid_map, loc_map)
+}
+
+/// Resolve an inline reference to an attachment plan entry index.
+///
+/// Returns `Some(plan_index)` only when exactly one attachment matches.
+/// Multiple candidates are treated as unresolved (returns `None`).
+fn resolve_reference(
+    value: &str,
+    kind: InlineReferenceKind,
+    cid_map: &HashMap<String, Vec<usize>>,
+    loc_map: &HashMap<String, Vec<usize>>,
+) -> Option<usize> {
+    match kind {
+        InlineReferenceKind::Cid => {
+            let key = normalize_cid_key(value);
+            cid_map.get(&key).and_then(|indices| {
+                if indices.len() == 1 {
+                    Some(indices[0])
+                } else {
+                    None // ambiguous
+                }
+            })
+        }
+        InlineReferenceKind::ContentLocation => {
+            let key = normalize_content_location_key(value);
+            loc_map.get(&key).and_then(|indices| {
+                if indices.len() == 1 {
+                    Some(indices[0])
+                } else {
+                    None // ambiguous
+                }
+            })
+        }
+        InlineReferenceKind::Other => None,
+    }
+}
+
+/// Rewrite inline `src` and `href` references in HTML to local attachment paths.
+///
+/// Only references that unambiguously match a single attachment in the plan
+/// are rewritten. External URLs, anchor links, and unresolved references
+/// remain untouched.
+pub fn rewrite_inline_references(
+    html: &str,
+    plan_entries: &[AttachmentExportPlanEntry],
+) -> String {
+    if plan_entries.is_empty() {
+        return html.to_string();
+    }
+
+    let (cid_map, loc_map) = build_lookup_maps(plan_entries);
+
+    let mut output = Vec::with_capacity(html.len());
+
+    let mut rewriter = HtmlRewriter::new(
+        Settings {
+            element_content_handlers: vec![element!("*", |el| {
+                for attr_name in &["src", "href"] {
+                    if let Some(value) = el.get_attribute(attr_name) {
+                        let kind = classify_reference(&value);
+                        if kind == InlineReferenceKind::Other {
+                            continue;
+                        }
+                        if let Some(plan_idx) = resolve_reference(&value, kind, &cid_map, &loc_map)
+                        {
+                            el.set_attribute(attr_name, &plan_entries[plan_idx].relative_path)
+                                .ok();
+                        }
+                    }
+                }
+                Ok(())
+            })],
+            ..Settings::new()
+        },
+        |chunk: &[u8]| {
+            output.extend_from_slice(chunk);
+        },
+    );
+
+    let _ = rewriter.write(html.as_bytes());
+    let _ = rewriter.end();
+
+    String::from_utf8(output).unwrap_or_else(|_| html.to_string())
 }
 
 #[cfg(test)]

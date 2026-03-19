@@ -471,15 +471,21 @@ impl ExportCoordinator {
                             reporter.record_draft_skipped();
                         }
 
-                        // Perform keyword matching if enabled
+                        // Perform keyword matching if enabled.
+                        // For HTML bodies, extract visible text so keywords in
+                        // tags, comments, <script>, and <style> do not match.
                         let matched_keywords: Vec<String> =
                             if let Some(kw_matcher) = &self.keyword_matcher {
-                                let body = message_data
-                                    .body_html
-                                    .as_deref()
-                                    .or(message_data.body_plain.as_deref());
-                                let kw_hits =
-                                    kw_matcher.search_message(Some(&message_data.subject), body);
+                                let body_text: Option<String> =
+                                    if let Some(ref html_body) = message_data.body_html {
+                                        Some(html::extract_visible_text(html_body))
+                                    } else {
+                                        message_data.body_plain.clone()
+                                    };
+                                let kw_hits = kw_matcher.search_message(
+                                    Some(&message_data.subject),
+                                    body_text.as_deref(),
+                                );
                                 let mut kw_list: Vec<_> = kw_hits.into_iter().collect();
                                 kw_list.sort();
                                 kw_list
@@ -573,11 +579,22 @@ impl ExportCoordinator {
             let conv_number = conversation_number_from_folder(conversation_folder);
             let mut error = 0_u8;
 
+            // Build attachment plan once per message; reused for both HTML
+            // rewriting and file output to keep filenames in sync.
+            let attachment_plan =
+                exporter::build_attachment_plan(&record.message_data.attachments);
+            let plan_for_html = if self.args.attachments {
+                Some(&attachment_plan)
+            } else {
+                None
+            };
+
             if let Err(e) = exporter.export_message(
                 &record.message_data,
                 record.sequence_number,
                 record.is_duplicate,
                 conversation_folder,
+                plan_for_html,
             ) {
                 reporter.record_error();
                 error = 1;
@@ -610,6 +627,7 @@ impl ExportCoordinator {
                     record.sequence_number,
                     record.is_duplicate,
                     conversation_folder,
+                    &attachment_plan,
                 ) {
                     error = 1;
                     eprintln!(
@@ -950,6 +968,12 @@ fn extract_attachments(
         // Get MIME type
         let content_type = props.get(0x370E).and_then(PropertyValueExt::as_string);
 
+        // Get content ID (PidTagAttachContentId, 0x3712) for cid: matching
+        let content_id = props.get(0x3712).and_then(PropertyValueExt::as_string);
+
+        // Get content location (PidTagAttachContentLocation, 0x3713)
+        let content_location = props.get(0x3713).and_then(PropertyValueExt::as_string);
+
         // Get attachment data
         let attachment_data = match data {
             Some(AttachmentData::Binary(bin)) => Some(bin.buffer().to_vec()),
@@ -961,6 +985,8 @@ fn extract_attachments(
                 filename: fname,
                 data: data_bytes,
                 content_type,
+                content_id,
+                content_location,
             });
         }
     }

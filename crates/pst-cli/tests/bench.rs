@@ -5,5 +5,6 @@
 mod bench {
     mod conversations_bench;
     mod export_bench;
+    mod html_export_bench;
     mod memory_bench;
 }

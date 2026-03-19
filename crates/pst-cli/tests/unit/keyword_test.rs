@@ -223,3 +223,99 @@ fn test_exact_match() {
     let matches = matcher.find_matches("hello");
     assert_eq!(matches.len(), 1);
 }
+
+// --- US1: HTML-Aware Keyword Matching Regression Tests (T009) ---
+
+use pst_cli::export::html::extract_visible_text;
+
+/// Helper: simulate the HTML-body keyword matching pipeline used in export/mod.rs.
+/// Extracts visible text from HTML, then runs keyword matching on the result.
+fn search_html_body(matcher: &KeywordMatcher, html: &str) -> HashSet<String> {
+    let visible = extract_visible_text(html);
+    matcher.find_matches(&visible)
+}
+
+#[test]
+fn test_html_keyword_matches_visible_text() {
+    let matcher = KeywordMatcher::from_string("confidential");
+    let html = "<html><body><p>This document is confidential.</p></body></html>";
+    let hits = search_html_body(&matcher, html);
+    assert_eq!(hits.len(), 1);
+    assert!(hits.contains("confidential"));
+}
+
+#[test]
+fn test_html_keyword_does_not_match_tag_names() {
+    let matcher = KeywordMatcher::from_string("body,html,div,span");
+    let html = "<html><body><div><span>Hello world</span></div></body></html>";
+    let hits = search_html_body(&matcher, html);
+    assert_eq!(hits.len(), 0, "Keywords in tag names must not match");
+}
+
+#[test]
+fn test_html_keyword_does_not_match_attribute_values() {
+    let matcher = KeywordMatcher::from_string("secret-class,myid");
+    let html = r#"<div class="secret-class" id="myid">Visible text</div>"#;
+    let hits = search_html_body(&matcher, html);
+    assert_eq!(hits.len(), 0, "Keywords in attribute values must not match");
+}
+
+#[test]
+fn test_html_keyword_does_not_match_script_content() {
+    let matcher = KeywordMatcher::from_string("password");
+    let html = r#"<html><body><script>var password = "hunter2";</script><p>Safe text</p></body></html>"#;
+    let hits = search_html_body(&matcher, html);
+    assert_eq!(hits.len(), 0, "Keywords inside <script> must not match");
+}
+
+#[test]
+fn test_html_keyword_does_not_match_style_content() {
+    let matcher = KeywordMatcher::from_string("hidden,display");
+    let html = "<html><head><style>.hidden { display: none; }</style></head><body><p>Shown</p></body></html>";
+    let hits = search_html_body(&matcher, html);
+    assert_eq!(hits.len(), 0, "Keywords inside <style> must not match");
+}
+
+#[test]
+fn test_html_keyword_does_not_match_html_comments() {
+    let matcher = KeywordMatcher::from_string("todo,fixme");
+    let html = "<html><body><!-- TODO: fixme later --><p>Normal text</p></body></html>";
+    let hits = search_html_body(&matcher, html);
+    assert_eq!(hits.len(), 0, "Keywords inside HTML comments must not match");
+}
+
+#[test]
+fn test_html_keyword_matches_only_in_visible_text_mixed() {
+    let matcher = KeywordMatcher::from_string("merger,confidential,script");
+    let html = r#"<html>
+        <head><style>.merger { color: red; }</style></head>
+        <body>
+            <script>var confidential = true;</script>
+            <p>The merger is proceeding as planned.</p>
+        </body>
+    </html>"#;
+    let hits = search_html_body(&matcher, html);
+    assert_eq!(hits.len(), 1, "Only 'merger' should match from visible text");
+    assert!(hits.contains("merger"));
+    assert!(!hits.contains("confidential"), "confidential is only in script");
+    assert!(!hits.contains("script"), "script is a tag name");
+}
+
+#[test]
+fn test_html_keyword_search_message_with_html_body() {
+    let matcher = KeywordMatcher::from_string("urgent");
+    let visible = extract_visible_text("<html><body><p>This is urgent!</p></body></html>");
+    let hits = matcher.search_message(Some("Normal subject"), Some(&visible));
+    assert_eq!(hits.len(), 1);
+    assert!(hits.contains("urgent"));
+}
+
+#[test]
+fn test_html_keyword_search_message_subject_match_body_hidden() {
+    let matcher = KeywordMatcher::from_string("important,password");
+    let visible = extract_visible_text(r#"<script>var password = "x";</script><p>Hello</p>"#);
+    let hits = matcher.search_message(Some("This is important"), Some(&visible));
+    assert_eq!(hits.len(), 1, "Only subject keyword should match");
+    assert!(hits.contains("important"));
+    assert!(!hits.contains("password"));
+}

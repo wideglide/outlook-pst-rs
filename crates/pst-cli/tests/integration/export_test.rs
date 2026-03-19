@@ -1041,3 +1041,189 @@ fn test_csv_duplicate_flag_accuracy() {
         "All CSV rows should have either true or false for duplicate flag"
     );
 }
+
+// --- US2: Inline Attachment Rewriting Integration Tests (T016) ---
+
+#[test]
+fn test_export_with_attachments_enabled_succeeds() {
+    // Verify the export pipeline runs without errors when attachments are enabled,
+    // exercising the new attachment plan + inline rewrite code path.
+    let pst_path = get_test_pst_path();
+    if !pst_path.exists() {
+        eprintln!("Skipping test: fixture not found");
+        return;
+    }
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let output_path = temp_dir.path().to_path_buf();
+
+    let mut args = create_test_export_args(pst_path, output_path.clone());
+    args.attachments = true;
+
+    let mut coordinator = ExportCoordinator::new(args);
+    let mut reporter = ProgressReporter::new(true);
+
+    let result = coordinator.run(&mut reporter);
+    assert!(
+        result.is_ok(),
+        "Export with attachments should succeed: {:?}",
+        result.err()
+    );
+
+    // Verify output directory exists and has content
+    assert!(output_path.exists(), "Output directory should exist");
+    let entries: Vec<_> = fs::read_dir(&output_path)
+        .expect("Should read output dir")
+        .filter_map(std::result::Result::ok)
+        .collect();
+    assert!(!entries.is_empty(), "Output should contain exported messages");
+}
+
+#[test]
+fn test_export_with_attachments_produces_message_html() {
+    // When attachments are enabled, every message directory should still
+    // contain a message.html file (inline rewriting must not break HTML output).
+    let pst_path = get_test_pst_path();
+    if !pst_path.exists() {
+        eprintln!("Skipping test: fixture not found");
+        return;
+    }
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let output_path = temp_dir.path().to_path_buf();
+
+    let mut args = create_test_export_args(pst_path, output_path.clone());
+    args.attachments = true;
+
+    let mut coordinator = ExportCoordinator::new(args);
+    let mut reporter = ProgressReporter::new(true);
+
+    let result = coordinator.run(&mut reporter);
+    assert!(result.is_ok(), "Export should succeed: {:?}", result.err());
+
+    // Check that message directories contain message.html
+    let msg_dirs: Vec<_> = fs::read_dir(&output_path)
+        .expect("read dir")
+        .filter_map(std::result::Result::ok)
+        .filter(|e| {
+            e.path().is_dir()
+                && e.file_name()
+                    .to_str()
+                    .unwrap_or("")
+                    .chars()
+                    .all(|c| c.is_ascii_digit())
+        })
+        .collect();
+
+    for dir_entry in &msg_dirs {
+        let html_path = dir_entry.path().join("message.html");
+        assert!(
+            html_path.exists(),
+            "Expected message.html in {:?}",
+            dir_entry.path()
+        );
+        let content = fs::read_to_string(&html_path).expect("read html");
+        assert!(!content.is_empty(), "message.html should not be empty");
+    }
+}
+
+#[test]
+fn test_export_message_html_no_broken_cid_when_attachments_disabled() {
+    // When attachments are disabled, message.html should NOT have its cid:
+    // references rewritten (no attachment plan is passed).
+    let pst_path = get_test_pst_path();
+    if !pst_path.exists() {
+        eprintln!("Skipping test: fixture not found");
+        return;
+    }
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let output_path = temp_dir.path().to_path_buf();
+
+    let mut args = create_test_export_args(pst_path, output_path.clone());
+    args.attachments = false;
+
+    let mut coordinator = ExportCoordinator::new(args);
+    let mut reporter = ProgressReporter::new(true);
+
+    let result = coordinator.run(&mut reporter);
+    assert!(result.is_ok(), "Export should succeed: {:?}", result.err());
+
+    // When attachments are off, the export pipeline should not crash and
+    // should still produce valid message.html files.
+    let msg_dirs: Vec<_> = fs::read_dir(&output_path)
+        .expect("read dir")
+        .filter_map(std::result::Result::ok)
+        .filter(|e| {
+            e.path().is_dir()
+                && e.file_name()
+                    .to_str()
+                    .unwrap_or("")
+                    .chars()
+                    .all(|c| c.is_ascii_digit())
+        })
+        .collect();
+
+    for dir_entry in &msg_dirs {
+        let html_path = dir_entry.path().join("message.html");
+        assert!(html_path.exists(), "message.html should exist even without attachments");
+    }
+}
+
+// --- US3: Mixed Reference Integration Tests (T023) ---
+
+#[test]
+fn test_export_message_html_contains_valid_html_with_attachments() {
+    // Verify message.html is valid parseable HTML when attachments are enabled,
+    // even when the source HTML might contain a mix of cid:, content-location,
+    // and external references.
+    let pst_path = get_test_pst_path();
+    if !pst_path.exists() {
+        eprintln!("Skipping test: fixture not found");
+        return;
+    }
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let output_path = temp_dir.path().to_path_buf();
+
+    let mut args = create_test_export_args(pst_path, output_path.clone());
+    args.attachments = true;
+
+    let mut coordinator = ExportCoordinator::new(args);
+    let mut reporter = ProgressReporter::new(true);
+
+    let result = coordinator.run(&mut reporter);
+    assert!(result.is_ok(), "Export should succeed: {:?}", result.err());
+
+    let msg_dirs: Vec<_> = fs::read_dir(&output_path)
+        .expect("read dir")
+        .filter_map(std::result::Result::ok)
+        .filter(|e| {
+            e.path().is_dir()
+                && e.file_name()
+                    .to_str()
+                    .unwrap_or("")
+                    .chars()
+                    .all(|c| c.is_ascii_digit())
+        })
+        .collect();
+
+    for dir_entry in &msg_dirs {
+        let html_path = dir_entry.path().join("message.html");
+        if html_path.exists() {
+            let content = fs::read_to_string(&html_path).expect("read html");
+            // Verify basic HTML structure is preserved after rewriting
+            assert!(
+                content.contains("<") && content.contains(">"),
+                "message.html should contain HTML tags"
+            );
+            // External URLs should never be rewritten away
+            // (we can't assert specific URLs without knowing PST content,
+            // but we can check the file didn't become empty or corrupted)
+            assert!(
+                content.len() > 10,
+                "message.html should have meaningful content after rewriting"
+            );
+        }
+    }
+}

@@ -36,6 +36,9 @@ encoding_rs = "0.8"
 # HTML escaping for content safety
 html-escape = "0.2"
 
+# Parse-based HTML processing for visible-text extraction and inline-reference rewriting
+lol_html = "2.2"
+
 [dev-dependencies]
 # Testing utilities
 tempfile = "3.8"

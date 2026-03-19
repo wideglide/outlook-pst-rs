@@ -5,8 +5,14 @@
 //! - RTF to HTML conversion (basic tags)
 //! - Plain text wrapping (check <p> and <br> tags)
 //! - Character encoding handling
+//!
+//! Tests T008 [US1]: Visible-text extraction and malformed-HTML handling
 
-use pst_cli::export::html::convert_to_html;
+use pst_cli::export::html::{
+    classify_reference, convert_to_html, extract_visible_text, normalize_cid_key,
+    normalize_content_location_key, rewrite_inline_references, InlineReferenceKind,
+};
+use pst_cli::export::exporter::AttachmentExportPlanEntry;
 
 #[test]
 fn test_html_passthrough_complete() {
@@ -207,4 +213,374 @@ fn test_html_priority_order() {
     // HTML should take priority
     let result = convert_to_html(Some(html), Some(rtf_data), Some(plain), None).unwrap();
     assert!(result.contains("HTML"));
+}
+
+// ---------------------------------------------------------------------------
+// T008 [US1] Visible-text extraction tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_visible_text_simple_paragraph() {
+    let html = "<html><body><p>Hello world</p></body></html>";
+    let text = extract_visible_text(html);
+    assert!(text.contains("Hello world"));
+}
+
+#[test]
+fn test_visible_text_excludes_script_content() {
+    let html = r#"<html><body>
+        <p>Visible paragraph</p>
+        <script>var keyword = "invoice";</script>
+    </body></html>"#;
+    let text = extract_visible_text(html);
+    assert!(text.contains("Visible paragraph"));
+    assert!(
+        !text.contains("invoice"),
+        "Script content must not be extracted: {text}"
+    );
+}
+
+#[test]
+fn test_visible_text_excludes_style_content() {
+    let html = r#"<html><body>
+        <style>.invoice { color: red; }</style>
+        <p>Real content</p>
+    </body></html>"#;
+    let text = extract_visible_text(html);
+    assert!(text.contains("Real content"));
+    assert!(
+        !text.contains("invoice"),
+        "Style content must not be extracted: {text}"
+    );
+}
+
+#[test]
+fn test_visible_text_excludes_html_comments() {
+    let html = "<html><body><!-- invoice hidden here --><p>Normal text</p></body></html>";
+    let text = extract_visible_text(html);
+    assert!(text.contains("Normal text"));
+    assert!(
+        !text.contains("invoice"),
+        "HTML comment content must not be extracted: {text}"
+    );
+}
+
+#[test]
+fn test_visible_text_excludes_tag_attribute_values() {
+    let html = r#"<html><body><div class="invoice-wrapper"><p>Body text only</p></div></body></html>"#;
+    let text = extract_visible_text(html);
+    assert!(text.contains("Body text only"));
+    assert!(
+        !text.contains("invoice-wrapper"),
+        "Tag attributes must not be extracted: {text}"
+    );
+}
+
+#[test]
+fn test_visible_text_multiple_text_nodes() {
+    let html = "<html><body><p>First</p><p>Second</p><div>Third</div></body></html>";
+    let text = extract_visible_text(html);
+    assert!(text.contains("First"));
+    assert!(text.contains("Second"));
+    assert!(text.contains("Third"));
+}
+
+#[test]
+fn test_visible_text_malformed_html_unclosed_tags() {
+    let html = "<p>Some text<div>More text";
+    let text = extract_visible_text(html);
+    assert!(text.contains("Some text"));
+    assert!(text.contains("More text"));
+}
+
+#[test]
+fn test_visible_text_malformed_html_script_unclosed() {
+    // Even with malformed HTML, script content should not leak into visible text
+    let html = "<p>Visible</p><script>var x = 'hidden';</script><p>Also visible</p>";
+    let text = extract_visible_text(html);
+    assert!(text.contains("Visible"));
+    assert!(text.contains("Also visible"));
+    assert!(
+        !text.contains("hidden"),
+        "Script content must not leak: {text}"
+    );
+}
+
+#[test]
+fn test_visible_text_empty_html() {
+    let text = extract_visible_text("");
+    assert!(text.is_empty());
+}
+
+#[test]
+fn test_visible_text_nested_elements() {
+    let html = "<html><body><div><span>Nested <b>bold</b> text</span></div></body></html>";
+    let text = extract_visible_text(html);
+    assert!(text.contains("Nested"));
+    assert!(text.contains("bold"));
+    assert!(text.contains("text"));
+}
+
+#[test]
+fn test_visible_text_preserves_order() {
+    let html = "<html><body><p>Alpha</p><p>Beta</p><p>Gamma</p></body></html>";
+    let text = extract_visible_text(html);
+    let alpha_pos = text.find("Alpha").unwrap();
+    let beta_pos = text.find("Beta").unwrap();
+    let gamma_pos = text.find("Gamma").unwrap();
+    assert!(alpha_pos < beta_pos);
+    assert!(beta_pos < gamma_pos);
+}
+
+#[test]
+fn test_visible_text_mixed_hidden_and_visible() {
+    let html = r#"<html><head>
+        <style>body { font-size: 14px; }</style>
+        <script>document.title = "confidential";</script>
+    </head><body>
+        <p>This invoice is payable</p>
+        <!-- internal: confidential draft -->
+        <script>trackEvent("confidential")</script>
+        <p>Please review</p>
+    </body></html>"#;
+    let text = extract_visible_text(html);
+    assert!(text.contains("invoice"));
+    assert!(text.contains("payable"));
+    assert!(text.contains("Please review"));
+    assert!(
+        !text.contains("confidential"),
+        "Hidden content must not appear: {text}"
+    );
+}
+
+// --- US2: cid: and content-location Rewrite Unit Tests (T015) ---
+
+fn plan_entry(
+    index: usize,
+    filename: &str,
+    cid_keys: Vec<&str>,
+    loc_keys: Vec<&str>,
+) -> AttachmentExportPlanEntry {
+    AttachmentExportPlanEntry {
+        attachment_index: index,
+        resolved_filename: filename.to_string(),
+        relative_path: filename.to_string(),
+        content_id_keys: cid_keys.into_iter().map(String::from).collect(),
+        content_location_keys: loc_keys.into_iter().map(String::from).collect(),
+    }
+}
+
+// --- classify_reference tests ---
+
+#[test]
+fn test_classify_cid_reference() {
+    assert_eq!(classify_reference("cid:image001@mail"), InlineReferenceKind::Cid);
+    assert_eq!(classify_reference("CID:Image001@mail"), InlineReferenceKind::Cid);
+    assert_eq!(classify_reference("  cid:foo  "), InlineReferenceKind::Cid);
+}
+
+#[test]
+fn test_classify_external_urls() {
+    assert_eq!(classify_reference("http://example.com"), InlineReferenceKind::Other);
+    assert_eq!(classify_reference("https://example.com"), InlineReferenceKind::Other);
+    assert_eq!(classify_reference("mailto:user@example.com"), InlineReferenceKind::Other);
+    assert_eq!(classify_reference("#anchor"), InlineReferenceKind::Other);
+    assert_eq!(classify_reference("data:image/png;base64,abc"), InlineReferenceKind::Other);
+}
+
+#[test]
+fn test_classify_content_location() {
+    assert_eq!(classify_reference("image001.png"), InlineReferenceKind::ContentLocation);
+    assert_eq!(classify_reference("Logo.PNG"), InlineReferenceKind::ContentLocation);
+}
+
+#[test]
+fn test_classify_empty_is_other() {
+    assert_eq!(classify_reference(""), InlineReferenceKind::Other);
+    assert_eq!(classify_reference("   "), InlineReferenceKind::Other);
+}
+
+// --- normalize keys tests ---
+
+#[test]
+fn test_normalize_cid_key_strips_prefix_and_brackets() {
+    assert_eq!(normalize_cid_key("cid:<Image001@example.com>"), "image001@example.com");
+    assert_eq!(normalize_cid_key("CID:Image002@mail"), "image002@mail");
+    assert_eq!(normalize_cid_key("  cid:  <FOO>  "), "foo");
+}
+
+#[test]
+fn test_normalize_content_location_key_lowercase() {
+    assert_eq!(normalize_content_location_key("Logo.PNG"), "logo.png");
+    assert_eq!(normalize_content_location_key("  Header.JPG  "), "header.jpg");
+}
+
+// --- rewrite_inline_references tests ---
+
+#[test]
+fn test_rewrite_cid_reference_in_img_src() {
+    let html = r#"<html><body><img src="cid:image001@mail"></body></html>"#;
+    let entries = vec![plan_entry(0, "image001.png", vec!["image001@mail"], vec![])];
+    let result = rewrite_inline_references(html, &entries);
+    assert!(result.contains(r#"src="image001.png""#), "cid: should be rewritten: {result}");
+    assert!(!result.contains("cid:"), "No cid: should remain: {result}");
+}
+
+#[test]
+fn test_rewrite_content_location_in_img_src() {
+    let html = r#"<html><body><img src="logo.png"></body></html>"#;
+    let entries = vec![plan_entry(0, "exported_logo.png", vec![], vec!["logo.png"])];
+    let result = rewrite_inline_references(html, &entries);
+    assert!(result.contains(r#"src="exported_logo.png""#), "Content-location should be rewritten: {result}");
+}
+
+#[test]
+fn test_rewrite_cid_case_insensitive() {
+    let html = r#"<img src="CID:Image001@Mail">"#;
+    let entries = vec![plan_entry(0, "image.png", vec!["image001@mail"], vec![])];
+    let result = rewrite_inline_references(html, &entries);
+    assert!(result.contains(r#"src="image.png""#), "Case-insensitive cid matching: {result}");
+}
+
+#[test]
+fn test_rewrite_preserves_external_urls() {
+    let html = r#"<a href="https://example.com">Link</a><img src="cid:img@mail">"#;
+    let entries = vec![plan_entry(0, "img.png", vec!["img@mail"], vec![])];
+    let result = rewrite_inline_references(html, &entries);
+    assert!(result.contains(r#"href="https://example.com""#), "External URL unchanged: {result}");
+    assert!(result.contains(r#"src="img.png""#), "cid: should be rewritten: {result}");
+}
+
+#[test]
+fn test_rewrite_preserves_mailto_links() {
+    let html = r#"<a href="mailto:user@example.com">Email</a>"#;
+    let entries = vec![plan_entry(0, "img.png", vec!["user@example.com"], vec![])];
+    let result = rewrite_inline_references(html, &entries);
+    assert!(result.contains(r#"href="mailto:user@example.com""#), "mailto: untouched: {result}");
+}
+
+#[test]
+fn test_rewrite_preserves_anchor_links() {
+    let html = r##"<a href="#section1">Jump</a>"##;
+    let entries = vec![plan_entry(0, "img.png", vec![], vec!["#section1"])];
+    let result = rewrite_inline_references(html, &entries);
+    assert!(result.contains(r##"href="#section1""##), "Anchor link untouched: {result}");
+}
+
+#[test]
+fn test_rewrite_empty_plan_returns_original() {
+    let html = r#"<img src="cid:image@mail">"#;
+    let result = rewrite_inline_references(html, &[]);
+    assert_eq!(result, html);
+}
+
+#[test]
+fn test_rewrite_multiple_cid_references() {
+    let html = r#"<img src="cid:header@mail"><img src="cid:footer@mail">"#;
+    let entries = vec![
+        plan_entry(0, "header.png", vec!["header@mail"], vec![]),
+        plan_entry(1, "footer.png", vec!["footer@mail"], vec![]),
+    ];
+    let result = rewrite_inline_references(html, &entries);
+    assert!(result.contains(r#"src="header.png""#), "Header rewritten: {result}");
+    assert!(result.contains(r#"src="footer.png""#), "Footer rewritten: {result}");
+}
+
+#[test]
+fn test_rewrite_unmatched_cid_preserved() {
+    let html = r#"<img src="cid:unknown@mail">"#;
+    let entries = vec![plan_entry(0, "img.png", vec!["other@mail"], vec![])];
+    let result = rewrite_inline_references(html, &entries);
+    assert!(result.contains("cid:unknown@mail"), "Unmatched cid: preserved: {result}");
+}
+
+#[test]
+fn test_rewrite_ambiguous_cid_preserved() {
+    // Two attachments with the same content_id key - should not rewrite (ambiguous)
+    let html = r#"<img src="cid:dup@mail">"#;
+    let entries = vec![
+        plan_entry(0, "a.png", vec!["dup@mail"], vec![]),
+        plan_entry(1, "b.png", vec!["dup@mail"], vec![]),
+    ];
+    let result = rewrite_inline_references(html, &entries);
+    assert!(result.contains("cid:dup@mail"), "Ambiguous cid: must be preserved: {result}");
+}
+
+#[test]
+fn test_rewrite_href_cid_in_anchor() {
+    let html = r#"<a href="cid:doc@mail">Download</a>"#;
+    let entries = vec![plan_entry(0, "document.pdf", vec!["doc@mail"], vec![])];
+    let result = rewrite_inline_references(html, &entries);
+    assert!(result.contains(r#"href="document.pdf""#), "href cid: rewritten: {result}");
+}
+
+// --- US3: Preserve Unrelated and Unresolvable Links (T021) ---
+
+#[test]
+fn test_rewrite_preserves_data_urls() {
+    let html = r#"<img src="data:image/png;base64,iVBOR">"#;
+    let entries = vec![plan_entry(0, "img.png", vec!["img@mail"], vec![])];
+    let result = rewrite_inline_references(html, &entries);
+    assert!(
+        result.contains("data:image/png;base64,iVBOR"),
+        "data: URL must be preserved: {result}"
+    );
+}
+
+#[test]
+fn test_rewrite_mixed_resolvable_and_unresolvable() {
+    let html = r#"<html><body>
+        <img src="cid:logo@mail">
+        <a href="https://example.com">External</a>
+        <img src="cid:unknown@mail">
+        <img src="banner.png">
+        <a href="mailto:help@example.com">Help</a>
+    </body></html>"#;
+    let entries = vec![
+        plan_entry(0, "logo.png", vec!["logo@mail"], vec![]),
+        plan_entry(1, "banner_exported.png", vec![], vec!["banner.png"]),
+    ];
+    let result = rewrite_inline_references(html, &entries);
+    // Resolvable references rewritten
+    assert!(result.contains(r#"src="logo.png""#), "cid:logo rewritten: {result}");
+    assert!(result.contains(r#"src="banner_exported.png""#), "content-location rewritten: {result}");
+    // Unresolvable and external preserved
+    assert!(result.contains("cid:unknown@mail"), "Unknown cid: preserved: {result}");
+    assert!(result.contains("https://example.com"), "External URL preserved: {result}");
+    assert!(result.contains("mailto:help@example.com"), "mailto: preserved: {result}");
+}
+
+#[test]
+fn test_rewrite_ambiguous_content_location_preserved() {
+    // Two attachments match the same content-location key
+    let html = r#"<img src="shared.png">"#;
+    let entries = vec![
+        plan_entry(0, "a.png", vec![], vec!["shared.png"]),
+        plan_entry(1, "b.png", vec![], vec!["shared.png"]),
+    ];
+    let result = rewrite_inline_references(html, &entries);
+    assert!(result.contains("shared.png"), "Ambiguous content-location must be preserved: {result}");
+    assert!(!result.contains("a.png"), "Should not resolve to first: {result}");
+    assert!(!result.contains("b.png"), "Should not resolve to second: {result}");
+}
+
+#[test]
+fn test_rewrite_unmatched_content_location_preserved() {
+    let html = r#"<img src="missing.png">"#;
+    let entries = vec![plan_entry(0, "other.png", vec![], vec!["different.png"])];
+    let result = rewrite_inline_references(html, &entries);
+    assert!(result.contains("missing.png"), "Unmatched content-location preserved: {result}");
+}
+
+#[test]
+fn test_rewrite_element_with_both_src_and_href() {
+    // Unusual but valid: element has both src and href attributes
+    let html = r#"<video src="cid:video@mail" href="cid:poster@mail"></video>"#;
+    let entries = vec![
+        plan_entry(0, "video.mp4", vec!["video@mail"], vec![]),
+        plan_entry(1, "poster.jpg", vec!["poster@mail"], vec![]),
+    ];
+    let result = rewrite_inline_references(html, &entries);
+    assert!(result.contains(r#"src="video.mp4""#), "src rewritten: {result}");
+    assert!(result.contains(r#"href="poster.jpg""#), "href rewritten: {result}");
 }

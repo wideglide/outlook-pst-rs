@@ -11,9 +11,10 @@ Command-line tool for exporting PST (Personal Storage Table) files to HTML for e
 - **Attachment Preservation**: Save email attachments with filesystem-safe filenames
 - **CSV Summaries**: Generate spreadsheet-ready summaries for analysis and reporting
 - **Draft-Aware Export**: Skip unsent drafts by default in export output while still listing them in CSV as `[DRAFT] ...`
-- **Keyword Filtering**: Search for specific keywords in subject and body (case-insensitive)
+- **Keyword Filtering**: Search for specific keywords in subject and body (case-insensitive, HTML-aware — ignores markup, scripts, styles, comments)
 - **Participant Filtering**: Find messages involving specific email addresses
 - **Conversation Grouping**: Route multi-message threads into deterministic `conv_#####` folders with `--conversations`
+- **Inline Attachment Rewriting**: Exported `message.html` rewrites `cid:` and content-location references to local attachment files (requires `--attachments`)
 - **PST Preview**: List folder structure and message counts without full export
 
 ## Installation
@@ -159,6 +160,14 @@ output_dir/
 - [Specification](../../specs/001-pst-cli-tool/spec.md)
 - [Quickstart Guide](../../specs/001-pst-cli-tool/quickstart.md)
 - [CLI Contract](../../specs/001-pst-cli-tool/contracts/cli-interface.md)
+- [HTML Search & Inline Export](../../specs/003-html-search-inline-export/quickstart.md)
+
+## Runnable Examples
+
+```bash
+cargo run -p pst-cli --example simple_usage
+cargo run -p pst-cli --example html_search_inline_export
+```
 
 ## Contributing
 

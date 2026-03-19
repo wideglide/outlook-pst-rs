@@ -31,10 +31,10 @@ fn multi_message_layout_uses_shared_conversation_folder() {
     let message = sample_message();
 
     exporter
-        .export_message(&message, 1, false, Some("conv_00001"))
+        .export_message(&message, 1, false, Some("conv_00001"), None)
         .unwrap();
     exporter
-        .export_message(&message, 2, false, Some("conv_00001"))
+        .export_message(&message, 2, false, Some("conv_00001"), None)
         .unwrap();
 
     assert!(temp

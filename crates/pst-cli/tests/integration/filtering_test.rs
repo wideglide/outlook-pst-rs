@@ -376,3 +376,118 @@ fn test_csv_email_match_count_accuracy() {
         }
     }
 }
+
+// --- US1: HTML-Aware Keyword Filtering Integration Tests (T010) ---
+
+#[test]
+fn test_export_html_keyword_filters_on_visible_text_only() {
+    // This integration test verifies that keyword filtering works on HTML body
+    // visible text only. Since we cannot control the PST content, we verify that
+    // the export pipeline correctly runs with keywords and doesn't crash.
+    let pst_path = get_test_pst_path();
+    if !pst_path.exists() {
+        eprintln!("Skipping test: fixture not found");
+        return;
+    }
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let output_path = temp_dir.path().to_path_buf();
+
+    let mut args = create_export_args(pst_path, output_path.clone());
+    // Keywords that would appear in HTML markup but not necessarily in visible text
+    args.keywords = Some(vec![
+        "font-family".to_string(),
+        "text-align".to_string(),
+        "mso-style".to_string(),
+    ]);
+
+    let mut coordinator = ExportCoordinator::new(args);
+    let mut reporter = ProgressReporter::new(true);
+
+    let result = coordinator.run(&mut reporter);
+    assert!(
+        result.is_ok(),
+        "Export with HTML-markup keywords should succeed: {:?}",
+        result.err()
+    );
+
+    // Verify that CSS-only keywords result in zero keyword counts in CSV
+    let csv_path = output_path.join("emails.csv");
+    if csv_path.exists() {
+        let csv_content = fs::read_to_string(&csv_path).expect("Should read CSV");
+        let lines: Vec<&str> = csv_content.lines().collect();
+        let header_fields: Vec<&str> = lines
+            .first()
+            .expect("CSV should include a header row")
+            .split(',')
+            .collect();
+        let keyword_count_idx = header_fields
+            .iter()
+            .position(|field| *field == "KeywordCount")
+            .expect("CSV should have KeywordCount column");
+
+        // All data rows should show 0 keyword matches since these keywords
+        // only appear in HTML styling, not visible text
+        for line in lines.iter().skip(1) {
+            let fields: Vec<&str> = line.split(',').collect();
+            if let Some(count_field) = fields.get(keyword_count_idx) {
+                let count: usize = count_field.trim().parse().unwrap_or(999);
+                assert_eq!(
+                    count, 0,
+                    "CSS-only keywords should have 0 matches in visible text, got {count}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn test_export_html_keyword_metadata_reflects_visible_text_matching() {
+    let pst_path = get_test_pst_path();
+    if !pst_path.exists() {
+        eprintln!("Skipping test: fixture not found");
+        return;
+    }
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let output_path = temp_dir.path().to_path_buf();
+
+    let mut args = create_export_args(pst_path, output_path.clone());
+    // Search for a keyword that only lives in HTML tags/attributes
+    args.keywords = Some(vec!["class".to_string(), "style".to_string()]);
+
+    let mut coordinator = ExportCoordinator::new(args);
+    let mut reporter = ProgressReporter::new(true);
+
+    let result = coordinator.run(&mut reporter);
+    assert!(
+        result.is_ok(),
+        "Export should succeed: {:?}",
+        result.err()
+    );
+
+    // Check metadata: keywords that only appear in markup should show "none"
+    let entries: Vec<_> = fs::read_dir(&output_path)
+        .expect("Should read output dir")
+        .filter_map(std::result::Result::ok)
+        .filter(|e| {
+            e.path().is_dir()
+                && e.file_name()
+                    .to_str()
+                    .unwrap_or("")
+                    .chars()
+                    .all(|c| c.is_ascii_digit())
+        })
+        .collect();
+
+    for entry in &entries {
+        let metadata_path = entry.path().join("metadata.txt");
+        if metadata_path.exists() {
+            let content = fs::read_to_string(&metadata_path).expect("Should read metadata.txt");
+            assert!(
+                content.contains("Keywords: none"),
+                "HTML-only keywords should not match visible text. Got: {content}"
+            );
+        }
+    }
+}

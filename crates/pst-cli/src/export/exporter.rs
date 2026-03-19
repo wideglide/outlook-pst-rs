@@ -5,6 +5,7 @@
 use super::html::convert_to_html;
 use super::metadata::{format_metadata, sanitize_filename};
 use crate::error::Result;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -58,6 +59,97 @@ pub struct Attachment {
     pub data: Vec<u8>,
     /// MIME type (if available)
     pub content_type: Option<String>,
+    /// `PidTagAttachContentId` for `cid:` inline reference matching
+    pub content_id: Option<String>,
+    /// `PidTagAttachContentLocation` for content-location inline reference matching
+    pub content_location: Option<String>,
+}
+
+/// Deterministic plan for exporting one message's attachments.
+///
+/// Built once before writing `message.html` so that inline-reference rewriting
+/// and file output share the same resolved filenames.
+#[derive(Debug, Clone)]
+pub struct AttachmentExportPlan {
+    /// Ordered entries, one per attachment.
+    pub entries: Vec<AttachmentExportPlanEntry>,
+}
+
+/// A single entry in the attachment export plan.
+#[derive(Debug, Clone)]
+pub struct AttachmentExportPlanEntry {
+    /// Index into the original `MessageData.attachments` vec.
+    pub attachment_index: usize,
+    /// Sanitized, collision-resolved filename that will be written to disk.
+    pub resolved_filename: String,
+    /// Relative path from `message.html` to this file (same directory).
+    pub relative_path: String,
+    /// Normalized content-id lookup keys (lowercase, angle brackets stripped).
+    pub content_id_keys: Vec<String>,
+    /// Normalized content-location lookup keys (lowercase).
+    pub content_location_keys: Vec<String>,
+}
+
+/// Build a deterministic attachment export plan from a message's attachments.
+///
+/// Applies filename sanitization and collision resolution identically to the
+/// logic previously only inside `write_attachments`, so HTML rewriting can
+/// discover the final filenames before any file is written.
+#[must_use]
+pub fn build_attachment_plan(attachments: &[Attachment]) -> AttachmentExportPlan {
+    let mut entries = Vec::with_capacity(attachments.len());
+    let mut used_filenames: HashMap<String, u32> = HashMap::new();
+
+    for (idx, attachment) in attachments.iter().enumerate() {
+        let mut filename = sanitize_filename(&attachment.filename);
+
+        // Handle filename collisions by adding numeric suffix
+        if let Some(count) = used_filenames.get_mut(&filename) {
+            *count += 1;
+            if let Some(dot_pos) = filename.rfind('.') {
+                let (name, ext) = filename.split_at(dot_pos);
+                filename = format!("{name}_{count}{ext}");
+            } else {
+                filename = format!("{filename}_{count}");
+            }
+        }
+        used_filenames.insert(filename.clone(), 1);
+
+        let relative_path = filename.clone();
+
+        // Normalize content_id: strip angle brackets, lowercase
+        let content_id_keys = attachment
+            .content_id
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map(|cid| {
+                let normalized = cid
+                    .trim()
+                    .trim_start_matches('<')
+                    .trim_end_matches('>')
+                    .to_lowercase();
+                vec![normalized]
+            })
+            .unwrap_or_default();
+
+        // Normalize content_location: lowercase
+        let content_location_keys = attachment
+            .content_location
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map(|loc| vec![loc.trim().to_lowercase()])
+            .unwrap_or_default();
+
+        entries.push(AttachmentExportPlanEntry {
+            attachment_index: idx,
+            resolved_filename: filename,
+            relative_path,
+            content_id_keys,
+            content_location_keys,
+        });
+    }
+
+    AttachmentExportPlan { entries }
 }
 
 impl MessageData {
@@ -104,6 +196,10 @@ impl MessageExporter {
     /// Export a message to the specified numbered directory
     /// If `is_duplicate` is true, exports to duplicates/ subdirectory
     ///
+    /// When `attachment_plan` is provided and the message has an HTML body,
+    /// inline `cid:` and content-location references are rewritten to the
+    /// corresponding local attachment filenames from the plan.
+    ///
     /// # Errors
     ///
     /// Returns an error if the output directory cannot be created or the HTML file cannot be written.
@@ -113,6 +209,7 @@ impl MessageExporter {
         sequence_number: u32,
         is_duplicate: bool,
         conversation_folder: Option<&str>,
+        attachment_plan: Option<&AttachmentExportPlan>,
     ) -> Result<PathBuf> {
         let message_dir = self.message_dir(sequence_number, is_duplicate, conversation_folder);
 
@@ -133,6 +230,14 @@ impl MessageExporter {
         .unwrap_or_else(|_| {
             r"<html><body><p>Error converting message body</p></body></html>".to_string()
         });
+
+        // Rewrite inline references when an attachment plan is available
+        let body_html = match attachment_plan {
+            Some(plan) if !plan.entries.is_empty() => {
+                super::html::rewrite_inline_references(&body_html, &plan.entries)
+            }
+            _ => body_html,
+        };
 
         // Build email header block
         let html_content = inject_message_header(&body_html, message);
@@ -179,7 +284,7 @@ impl MessageExporter {
         Ok(())
     }
 
-    /// Export attachments for a message (optional)
+    /// Export attachments for a message using a pre-computed plan.
     ///
     /// # Errors
     ///
@@ -190,6 +295,7 @@ impl MessageExporter {
         sequence_number: u32,
         is_duplicate: bool,
         conversation_folder: Option<&str>,
+        plan: &AttachmentExportPlan,
     ) -> Result<()> {
         if message.attachments.is_empty() {
             return Ok(());
@@ -197,32 +303,16 @@ impl MessageExporter {
 
         let message_dir = self.message_dir(sequence_number, is_duplicate, conversation_folder);
 
-        // Track filename collisions
-        let mut used_filenames: std::collections::HashMap<String, u32> =
-            std::collections::HashMap::new();
-
-        for attachment in &message.attachments {
-            let mut filename = sanitize_filename(&attachment.filename);
-
-            // Handle filename collisions by adding numeric suffix
-            if let Some(count) = used_filenames.get_mut(&filename) {
-                *count += 1;
-                // Split filename and extension
-                if let Some(dot_pos) = filename.rfind('.') {
-                    let (name, ext) = filename.split_at(dot_pos);
-                    filename = format!("{name}_{count}{ext}");
-                } else {
-                    filename = format!("{filename}_{count}");
-                }
-            }
-            used_filenames.insert(filename.clone(), 1);
-
-            // Write attachment file
-            let attachment_path = message_dir.join(&filename);
+        for entry in &plan.entries {
+            let attachment = &message.attachments[entry.attachment_index];
+            let attachment_path = message_dir.join(&entry.resolved_filename);
             fs::write(&attachment_path, &attachment.data).map_err(|e| {
                 crate::error::Error::Export(crate::error::ExportError::MessageFailed(
                     sequence_number,
-                    format!("Failed to write attachment {filename}: {e}"),
+                    format!(
+                        "Failed to write attachment {}: {e}",
+                        entry.resolved_filename
+                    ),
                 ))
             })?;
         }
@@ -286,7 +376,7 @@ fn inject_message_header(html: &str, message: &MessageData) -> String {
     use std::fmt::Write;
 
     let mut header = String::from(
-        r#"<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;border-bottom:1px solid #ccc;padding-bottom:8px;margin-bottom:12px;">"#,
+        r#"<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;font-size:14px;border-bottom:3px solid #ccc;padding-bottom:8px;margin-bottom:12px;">"#,
     );
 
     let _ = writeln!(
@@ -352,7 +442,7 @@ mod tests {
         let exporter = MessageExporter::new(temp_dir.path().to_path_buf());
         let message = MessageData::example();
 
-        let result = exporter.export_message(&message, 1, false, None);
+        let result = exporter.export_message(&message, 1, false, None, None);
         assert!(result.is_ok());
 
         let message_dir = temp_dir.path().join("00001");
@@ -365,7 +455,7 @@ mod tests {
         let exporter = MessageExporter::new(temp_dir.path().to_path_buf());
         let message = MessageData::example();
 
-        exporter.export_message(&message, 1, false, None).unwrap();
+        exporter.export_message(&message, 1, false, None, None).unwrap();
 
         let html_path = temp_dir.path().join("00001").join("message.html");
         assert!(html_path.exists());
@@ -380,7 +470,7 @@ mod tests {
         let exporter = MessageExporter::new(temp_dir.path().to_path_buf());
         let message = MessageData::example();
 
-        exporter.export_message(&message, 1, false, None).unwrap();
+        exporter.export_message(&message, 1, false, None, None).unwrap();
         exporter
             .write_metadata(
                 &message,

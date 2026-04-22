@@ -20,9 +20,9 @@ use outlook_pst::messaging::folder::Folder;
 use outlook_pst::messaging::message::Message;
 use outlook_pst::messaging::store::Store;
 use outlook_pst::ndb::node_id::NodeId;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::collections::HashMap;
 
 pub mod conversation;
 pub mod csv;

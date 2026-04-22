@@ -227,12 +227,9 @@ fn test_output_dir_path_construction() {
     let coordinator = ExportCoordinator::new(args);
 
     let dir = coordinator.get_message_output_dir(123, false);
-    let path_str = dir.to_str().unwrap();
+    let expected = PathBuf::from("/export/output").join("00123");
 
-    // Should start with output directory
-    assert!(path_str.starts_with("/export/output"));
-    // Should end with formatted sequence
-    assert!(path_str.ends_with("00123"));
+    assert_eq!(dir, expected);
 }
 
 #[test]
@@ -252,10 +249,9 @@ fn test_duplicate_dir_path_construction() {
     let coordinator = ExportCoordinator::new(args);
 
     let dir = coordinator.get_message_output_dir(456, true);
-    let path_str = dir.to_str().unwrap();
+    let expected = PathBuf::from("/export/output")
+        .join("duplicates")
+        .join("00456");
 
-    // Should contain duplicates subdirectory
-    assert!(path_str.contains("/duplicates/"));
-    // Should end with formatted sequence
-    assert!(path_str.ends_with("00456"));
+    assert_eq!(dir, expected);
 }

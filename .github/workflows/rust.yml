@@ -9,6 +9,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -68,7 +71,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: outlook-pst-cli-${{ matrix.os }}
+          name: pst-cli-${{ matrix.os }}
           path: |
-            target/release/outlook-pst-cli
-            target/release/outlook-pst-cli.exe
+            target/release/pst-cli
+            target/release/pst-cli.exe

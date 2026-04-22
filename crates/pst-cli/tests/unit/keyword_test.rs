@@ -292,13 +292,13 @@ fn test_html_keyword_does_not_match_html_comments() {
 #[test]
 fn test_html_keyword_matches_only_in_visible_text_mixed() {
     let matcher = KeywordMatcher::from_string("merger,confidential,script");
-    let html = r#"<html>
+    let html = r"<html>
         <head><style>.merger { color: red; }</style></head>
         <body>
             <script>var confidential = true;</script>
             <p>The merger is proceeding as planned.</p>
         </body>
-    </html>"#;
+    </html>";
     let hits = search_html_body(&matcher, html);
     assert_eq!(
         hits.len(),

@@ -16,11 +16,15 @@ fn generate_html(paragraphs: usize, inline_images: usize) -> String {
     let mut html =
         String::from("<html><head><style>body { font-family: Calibri; }</style></head><body>");
     for i in 0..paragraphs {
-        html.push_str(&format!(
-            "<p>Paragraph {i} with some representative email text about quarterly results and upcoming meetings.</p>"
-        ));
+        html.push_str("<p>Paragraph ");
+        html.push_str(&i.to_string());
+        html.push_str(
+            " with some representative email text about quarterly results and upcoming meetings.</p>",
+        );
         if i < inline_images {
-            html.push_str(&format!(r#"<img src="cid:image{i}@mail">"#));
+            html.push_str(r#"<img src="cid:image"#);
+            html.push_str(&i.to_string());
+            html.push_str(r#"@mail">"#);
         }
     }
     html.push_str("<script>var tracking = true;</script></body></html>");

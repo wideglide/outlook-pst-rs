@@ -1220,7 +1220,7 @@ fn test_export_message_html_contains_valid_html_with_attachments() {
             let content = fs::read_to_string(&html_path).expect("read html");
             // Verify basic HTML structure is preserved after rewriting
             assert!(
-                content.contains("<") && content.contains(">"),
+                content.contains('<') && content.contains('>'),
                 "message.html should contain HTML tags"
             );
             // External URLs should never be rewritten away

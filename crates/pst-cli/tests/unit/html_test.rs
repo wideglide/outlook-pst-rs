@@ -242,10 +242,10 @@ fn test_visible_text_excludes_script_content() {
 
 #[test]
 fn test_visible_text_excludes_style_content() {
-    let html = r#"<html><body>
+    let html = r"<html><body>
         <style>.invoice { color: red; }</style>
         <p>Real content</p>
-    </body></html>"#;
+    </body></html>";
     let text = extract_visible_text(html);
     assert!(text.contains("Real content"));
     assert!(

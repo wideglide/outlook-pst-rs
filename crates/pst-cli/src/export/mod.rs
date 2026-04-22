@@ -22,6 +22,7 @@ use outlook_pst::messaging::store::Store;
 use outlook_pst::ndb::node_id::NodeId;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::collections::HashMap;
 
 pub mod conversation;
 pub mod csv;
@@ -39,6 +40,13 @@ struct StagedExportRecord {
     is_duplicate: bool,
     matched_keywords: Vec<String>,
     matched_emails: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ExportArtifactOptions {
+    metadata: bool,
+    attachments: bool,
+    headers: bool,
 }
 
 /// Extension trait for convenient value extraction from [`PropertyValue`].
@@ -160,9 +168,7 @@ fn build_folder_path(parent_path: Option<&str>, folder_name: &str) -> String {
     }
 }
 
-fn build_conversation_assignments(
-    staged_exports: &[StagedExportRecord],
-) -> std::collections::HashMap<u32, String> {
+fn build_conversation_assignments(staged_exports: &[StagedExportRecord]) -> HashMap<u32, String> {
     let mut main_candidates = Vec::new();
     let mut duplicate_candidates = Vec::new();
 
@@ -565,115 +571,139 @@ impl ExportCoordinator {
         }
 
         let exporter = MessageExporter::new(self.args.output.clone());
+        let artifact_options = ExportArtifactOptions {
+            metadata: self.args.metadata,
+            attachments: self.args.attachments,
+            headers: self.args.headers,
+        };
         let mut conversation_assignments = std::collections::HashMap::new();
 
         if self.args.conversations {
             conversation_assignments = build_conversation_assignments(&self.staged_exports);
         }
 
+        let csv_exporter = &mut self.csv_exporter;
         for record in &self.staged_exports {
             let conversation_folder = conversation_assignments
                 .get(&record.sequence_number)
                 .map(std::string::String::as_str);
-            let conv_number = conversation_number_from_folder(conversation_folder);
-            let mut error = 0_u8;
+            Self::write_staged_export_record(
+                &exporter,
+                csv_exporter,
+                artifact_options,
+                record,
+                conversation_folder,
+                reporter,
+            );
+        }
+    }
 
-            // Build attachment plan once per message; reused for both HTML
-            // rewriting and file output to keep filenames in sync.
-            let attachment_plan = exporter::build_attachment_plan(&record.message_data.attachments);
-            let plan_for_html = if self.args.attachments {
-                Some(&attachment_plan)
-            } else {
-                None
-            };
+    fn write_staged_export_record(
+        exporter: &MessageExporter,
+        csv_exporter: &mut Option<CsvExporter>,
+        artifact_options: ExportArtifactOptions,
+        record: &StagedExportRecord,
+        conversation_folder: Option<&str>,
+        reporter: &mut ProgressReporter,
+    ) {
+        let conv_number = conversation_number_from_folder(conversation_folder);
+        let mut error = 0_u8;
 
-            if let Err(e) = exporter.export_message(
+        // Build attachment plan once per message; reused for both HTML
+        // rewriting and file output to keep filenames in sync.
+        let attachment_plan = exporter::build_attachment_plan(&record.message_data.attachments);
+        let plan_for_html = if artifact_options.attachments {
+            Some(&attachment_plan)
+        } else {
+            None
+        };
+
+        if let Err(e) = exporter.export_message(
+            &record.message_data,
+            record.sequence_number,
+            record.is_duplicate,
+            conversation_folder,
+            plan_for_html,
+        ) {
+            reporter.record_error();
+            error = 1;
+            eprintln!(
+                "Warning: Failed to export message {}: {}",
+                record.sequence_number, e
+            );
+        }
+
+        if artifact_options.metadata {
+            if let Err(e) = exporter.write_metadata(
                 &record.message_data,
                 record.sequence_number,
                 record.is_duplicate,
                 conversation_folder,
-                plan_for_html,
+                &record.matched_keywords,
+                &record.matched_emails,
             ) {
-                reporter.record_error();
                 error = 1;
                 eprintln!(
-                    "Warning: Failed to export message {}: {}",
+                    "Warning: Failed to export metadata for message {}: {}",
                     record.sequence_number, e
                 );
             }
+        }
 
-            if self.args.metadata {
-                if let Err(e) = exporter.write_metadata(
-                    &record.message_data,
-                    record.sequence_number,
-                    record.is_duplicate,
-                    conversation_folder,
-                    &record.matched_keywords,
-                    &record.matched_emails,
-                ) {
-                    error = 1;
-                    eprintln!(
-                        "Warning: Failed to export metadata for message {}: {}",
-                        record.sequence_number, e
-                    );
-                }
+        if artifact_options.attachments {
+            if let Err(e) = exporter.write_attachments(
+                &record.message_data,
+                record.sequence_number,
+                record.is_duplicate,
+                conversation_folder,
+                &attachment_plan,
+            ) {
+                error = 1;
+                eprintln!(
+                    "Warning: Failed to export attachments for message {}: {}",
+                    record.sequence_number, e
+                );
             }
+        }
 
-            if self.args.attachments {
-                if let Err(e) = exporter.write_attachments(
-                    &record.message_data,
-                    record.sequence_number,
-                    record.is_duplicate,
-                    conversation_folder,
-                    &attachment_plan,
-                ) {
-                    error = 1;
-                    eprintln!(
-                        "Warning: Failed to export attachments for message {}: {}",
-                        record.sequence_number, e
-                    );
-                }
+        if artifact_options.headers {
+            if let Err(e) = exporter.write_headers(
+                &record.message_data,
+                record.sequence_number,
+                record.is_duplicate,
+                conversation_folder,
+            ) {
+                error = 1;
+                eprintln!(
+                    "Warning: Failed to export headers for message {}: {}",
+                    record.sequence_number, e
+                );
             }
+        }
 
-            if self.args.headers {
-                if let Err(e) = exporter.write_headers(
-                    &record.message_data,
-                    record.sequence_number,
-                    record.is_duplicate,
-                    conversation_folder,
-                ) {
-                    error = 1;
-                    eprintln!(
-                        "Warning: Failed to export headers for message {}: {}",
-                        record.sequence_number, e
-                    );
-                }
-            }
+        if let Some(ref mut csv) = csv_exporter {
+            let csv_row = CsvRow {
+                sequence_number: record.sequence_number,
+                subject: record.message_data.subject.clone(),
+                from: record.message_data.from.clone(),
+                to: record.message_data.to.join("; "),
+                date: record.message_data.date.clone(),
+                message_id: record.message_data.message_id.clone().unwrap_or_default(),
+                is_duplicate: record.is_duplicate,
+                keyword_count: record.matched_keywords.len(),
+                email_match_count: record.matched_emails.len(),
+                size: record.message_data.size_bytes.unwrap_or(0),
+                attachment_count: record.message_data.attachments.len(),
+                conv_number,
+                pst_store_name: record.pst_store_name.clone(),
+                error,
+            };
 
-            if let Some(ref mut csv) = self.csv_exporter {
-                let csv_row = CsvRow {
-                    sequence_number: record.sequence_number,
-                    subject: record.message_data.subject.clone(),
-                    from: record.message_data.from.clone(),
-                    to: record.message_data.to.join("; "),
-                    date: record.message_data.date.clone(),
-                    message_id: record.message_data.message_id.clone().unwrap_or_default(),
-                    is_duplicate: record.is_duplicate,
-                    keyword_count: record.matched_keywords.len(),
-                    email_match_count: record.matched_emails.len(),
-                    size: record.message_data.size_bytes.unwrap_or(0),
-                    attachment_count: record.message_data.attachments.len(),
-                    conv_number,
-                    pst_store_name: record.pst_store_name.clone(),
-                    error,
-                };
-
-                if let Err(e) = csv.write_row(&csv_row) {
-                    eprintln!(
-                        "Warning: Failed to write CSV row for message {}: {}",
-                        record.sequence_number, e
-                    );
-                }
+            if let Err(e) = csv.write_row(&csv_row) {
+                eprintln!(
+                    "Warning: Failed to write CSV row for message {}: {}",
+                    record.sequence_number, e
+                );
             }
         }
     }

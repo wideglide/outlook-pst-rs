@@ -28,7 +28,10 @@ fn conversation_index_takes_precedence_over_conversation_id() {
     let cid = [1_u8; 16];
     let key = derive_conversation_key(Some(&cid), Some(&bytes));
 
-    assert_eq!(key, Some(ConversationKey::ConversationIndexBytes([2_u8; 16])));
+    assert_eq!(
+        key,
+        Some(ConversationKey::ConversationIndexBytes([2_u8; 16]))
+    );
 }
 
 #[test]

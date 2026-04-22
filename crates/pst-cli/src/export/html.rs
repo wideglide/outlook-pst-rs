@@ -96,8 +96,7 @@ fn normalize_charset_to_utf8(html: &str) -> String {
                 // <meta http-equiv="Content-Type" content="text/html; charset=...">
                 if let Some(http_equiv) = el.get_attribute("http-equiv") {
                     if http_equiv.eq_ignore_ascii_case("Content-Type") {
-                        el.set_attribute("content", "text/html; charset=utf-8")
-                            .ok();
+                        el.set_attribute("content", "text/html; charset=utf-8").ok();
                     }
                 }
                 Ok(())
@@ -280,6 +279,7 @@ fn encode_to_utf8(text: &str, charset: Option<&str>) -> String {
 ///
 /// The returned string preserves text-node ordering and inserts spaces
 /// between blocks so substring keyword matching works naturally.
+#[must_use]
 pub fn extract_visible_text(html: &str) -> String {
     // Two-pass approach: first strip <script> and <style> elements completely,
     // then collect text nodes from the remaining HTML.
@@ -354,6 +354,7 @@ pub enum InlineReferenceKind {
 
 /// Classify a URL-valued attribute as a `cid:` reference, a potential
 /// content-location reference, or something else (external / anchor).
+#[must_use]
 pub fn classify_reference(value: &str) -> InlineReferenceKind {
     let trimmed = value.trim();
     if trimmed.to_ascii_lowercase().starts_with("cid:") {
@@ -377,6 +378,7 @@ pub fn classify_reference(value: &str) -> InlineReferenceKind {
 
 /// Normalize a `cid:` reference value into a lookup key that matches our
 /// attachment plan's `content_id_keys`.
+#[must_use]
 pub fn normalize_cid_key(value: &str) -> String {
     value
         .trim()
@@ -389,6 +391,7 @@ pub fn normalize_cid_key(value: &str) -> String {
 }
 
 /// Normalize a content-location reference value into a lookup key.
+#[must_use]
 pub fn normalize_content_location_key(value: &str) -> String {
     value.trim().to_lowercase()
 }
@@ -452,10 +455,8 @@ fn resolve_reference(
 /// Only references that unambiguously match a single attachment in the plan
 /// are rewritten. External URLs, anchor links, and unresolved references
 /// remain untouched.
-pub fn rewrite_inline_references(
-    html: &str,
-    plan_entries: &[AttachmentExportPlanEntry],
-) -> String {
+#[must_use]
+pub fn rewrite_inline_references(html: &str, plan_entries: &[AttachmentExportPlanEntry]) -> String {
     if plan_entries.is_empty() {
         return html.to_string();
     }

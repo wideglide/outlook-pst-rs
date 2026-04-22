@@ -263,7 +263,8 @@ fn test_html_keyword_does_not_match_attribute_values() {
 #[test]
 fn test_html_keyword_does_not_match_script_content() {
     let matcher = KeywordMatcher::from_string("password");
-    let html = r#"<html><body><script>var password = "hunter2";</script><p>Safe text</p></body></html>"#;
+    let html =
+        r#"<html><body><script>var password = "hunter2";</script><p>Safe text</p></body></html>"#;
     let hits = search_html_body(&matcher, html);
     assert_eq!(hits.len(), 0, "Keywords inside <script> must not match");
 }
@@ -281,7 +282,11 @@ fn test_html_keyword_does_not_match_html_comments() {
     let matcher = KeywordMatcher::from_string("todo,fixme");
     let html = "<html><body><!-- TODO: fixme later --><p>Normal text</p></body></html>";
     let hits = search_html_body(&matcher, html);
-    assert_eq!(hits.len(), 0, "Keywords inside HTML comments must not match");
+    assert_eq!(
+        hits.len(),
+        0,
+        "Keywords inside HTML comments must not match"
+    );
 }
 
 #[test]
@@ -295,9 +300,16 @@ fn test_html_keyword_matches_only_in_visible_text_mixed() {
         </body>
     </html>"#;
     let hits = search_html_body(&matcher, html);
-    assert_eq!(hits.len(), 1, "Only 'merger' should match from visible text");
+    assert_eq!(
+        hits.len(),
+        1,
+        "Only 'merger' should match from visible text"
+    );
     assert!(hits.contains("merger"));
-    assert!(!hits.contains("confidential"), "confidential is only in script");
+    assert!(
+        !hits.contains("confidential"),
+        "confidential is only in script"
+    );
     assert!(!hits.contains("script"), "script is a tag name");
 }
 

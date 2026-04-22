@@ -474,24 +474,23 @@ impl ExportCoordinator {
                         // Perform keyword matching if enabled.
                         // For HTML bodies, extract visible text so keywords in
                         // tags, comments, <script>, and <style> do not match.
-                        let matched_keywords: Vec<String> =
-                            if let Some(kw_matcher) = &self.keyword_matcher {
-                                let body_text: Option<String> =
-                                    if let Some(ref html_body) = message_data.body_html {
-                                        Some(html::extract_visible_text(html_body))
-                                    } else {
-                                        message_data.body_plain.clone()
-                                    };
-                                let kw_hits = kw_matcher.search_message(
-                                    Some(&message_data.subject),
-                                    body_text.as_deref(),
-                                );
-                                let mut kw_list: Vec<_> = kw_hits.into_iter().collect();
-                                kw_list.sort();
-                                kw_list
-                            } else {
-                                vec![]
-                            };
+                        let matched_keywords: Vec<String> = if let Some(kw_matcher) =
+                            &self.keyword_matcher
+                        {
+                            let body_text: Option<String> =
+                                if let Some(ref html_body) = message_data.body_html {
+                                    Some(html::extract_visible_text(html_body))
+                                } else {
+                                    message_data.body_plain.clone()
+                                };
+                            let kw_hits = kw_matcher
+                                .search_message(Some(&message_data.subject), body_text.as_deref());
+                            let mut kw_list: Vec<_> = kw_hits.into_iter().collect();
+                            kw_list.sort();
+                            kw_list
+                        } else {
+                            vec![]
+                        };
 
                         // Perform email matching if enabled
                         let matched_emails: Vec<String> =
@@ -581,8 +580,7 @@ impl ExportCoordinator {
 
             // Build attachment plan once per message; reused for both HTML
             // rewriting and file output to keep filenames in sync.
-            let attachment_plan =
-                exporter::build_attachment_plan(&record.message_data.attachments);
+            let attachment_plan = exporter::build_attachment_plan(&record.message_data.attachments);
             let plan_for_html = if self.args.attachments {
                 Some(&attachment_plan)
             } else {

@@ -1076,7 +1076,10 @@ fn test_export_with_attachments_enabled_succeeds() {
         .expect("Should read output dir")
         .filter_map(std::result::Result::ok)
         .collect();
-    assert!(!entries.is_empty(), "Output should contain exported messages");
+    assert!(
+        !entries.is_empty(),
+        "Output should contain exported messages"
+    );
 }
 
 #[test]
@@ -1166,7 +1169,10 @@ fn test_export_message_html_no_broken_cid_when_attachments_disabled() {
 
     for dir_entry in &msg_dirs {
         let html_path = dir_entry.path().join("message.html");
-        assert!(html_path.exists(), "message.html should exist even without attachments");
+        assert!(
+            html_path.exists(),
+            "message.html should exist even without attachments"
+        );
     }
 }
 

@@ -455,7 +455,9 @@ mod tests {
         let exporter = MessageExporter::new(temp_dir.path().to_path_buf());
         let message = MessageData::example();
 
-        exporter.export_message(&message, 1, false, None, None).unwrap();
+        exporter
+            .export_message(&message, 1, false, None, None)
+            .unwrap();
 
         let html_path = temp_dir.path().join("00001").join("message.html");
         assert!(html_path.exists());
@@ -470,7 +472,9 @@ mod tests {
         let exporter = MessageExporter::new(temp_dir.path().to_path_buf());
         let message = MessageData::example();
 
-        exporter.export_message(&message, 1, false, None, None).unwrap();
+        exporter
+            .export_message(&message, 1, false, None, None)
+            .unwrap();
         exporter
             .write_metadata(
                 &message,

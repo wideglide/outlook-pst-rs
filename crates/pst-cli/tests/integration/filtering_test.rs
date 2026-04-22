@@ -460,11 +460,7 @@ fn test_export_html_keyword_metadata_reflects_visible_text_matching() {
     let mut reporter = ProgressReporter::new(true);
 
     let result = coordinator.run(&mut reporter);
-    assert!(
-        result.is_ok(),
-        "Export should succeed: {:?}",
-        result.err()
-    );
+    assert!(result.is_ok(), "Export should succeed: {:?}", result.err());
 
     // Check metadata: keywords that only appear in markup should show "none"
     let entries: Vec<_> = fs::read_dir(&output_path)

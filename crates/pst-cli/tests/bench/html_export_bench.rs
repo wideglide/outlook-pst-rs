@@ -13,7 +13,8 @@ use std::time::Instant;
 
 /// Generate a realistic HTML body of approximately `n` paragraphs.
 fn generate_html(paragraphs: usize, inline_images: usize) -> String {
-    let mut html = String::from("<html><head><style>body { font-family: Calibri; }</style></head><body>");
+    let mut html =
+        String::from("<html><head><style>body { font-family: Calibri; }</style></head><body>");
     for i in 0..paragraphs {
         html.push_str(&format!(
             "<p>Paragraph {i} with some representative email text about quarterly results and upcoming meetings.</p>"

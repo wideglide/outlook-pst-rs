@@ -8,11 +8,11 @@
 //!
 //! Tests T008 [US1]: Visible-text extraction and malformed-HTML handling
 
+use pst_cli::export::exporter::AttachmentExportPlanEntry;
 use pst_cli::export::html::{
     classify_reference, convert_to_html, extract_visible_text, normalize_cid_key,
     normalize_content_location_key, rewrite_inline_references, InlineReferenceKind,
 };
-use pst_cli::export::exporter::AttachmentExportPlanEntry;
 
 #[test]
 fn test_html_passthrough_complete() {
@@ -267,7 +267,8 @@ fn test_visible_text_excludes_html_comments() {
 
 #[test]
 fn test_visible_text_excludes_tag_attribute_values() {
-    let html = r#"<html><body><div class="invoice-wrapper"><p>Body text only</p></div></body></html>"#;
+    let html =
+        r#"<html><body><div class="invoice-wrapper"><p>Body text only</p></div></body></html>"#;
     let text = extract_visible_text(html);
     assert!(text.contains("Body text only"));
     assert!(
@@ -374,24 +375,48 @@ fn plan_entry(
 
 #[test]
 fn test_classify_cid_reference() {
-    assert_eq!(classify_reference("cid:image001@mail"), InlineReferenceKind::Cid);
-    assert_eq!(classify_reference("CID:Image001@mail"), InlineReferenceKind::Cid);
+    assert_eq!(
+        classify_reference("cid:image001@mail"),
+        InlineReferenceKind::Cid
+    );
+    assert_eq!(
+        classify_reference("CID:Image001@mail"),
+        InlineReferenceKind::Cid
+    );
     assert_eq!(classify_reference("  cid:foo  "), InlineReferenceKind::Cid);
 }
 
 #[test]
 fn test_classify_external_urls() {
-    assert_eq!(classify_reference("http://example.com"), InlineReferenceKind::Other);
-    assert_eq!(classify_reference("https://example.com"), InlineReferenceKind::Other);
-    assert_eq!(classify_reference("mailto:user@example.com"), InlineReferenceKind::Other);
+    assert_eq!(
+        classify_reference("http://example.com"),
+        InlineReferenceKind::Other
+    );
+    assert_eq!(
+        classify_reference("https://example.com"),
+        InlineReferenceKind::Other
+    );
+    assert_eq!(
+        classify_reference("mailto:user@example.com"),
+        InlineReferenceKind::Other
+    );
     assert_eq!(classify_reference("#anchor"), InlineReferenceKind::Other);
-    assert_eq!(classify_reference("data:image/png;base64,abc"), InlineReferenceKind::Other);
+    assert_eq!(
+        classify_reference("data:image/png;base64,abc"),
+        InlineReferenceKind::Other
+    );
 }
 
 #[test]
 fn test_classify_content_location() {
-    assert_eq!(classify_reference("image001.png"), InlineReferenceKind::ContentLocation);
-    assert_eq!(classify_reference("Logo.PNG"), InlineReferenceKind::ContentLocation);
+    assert_eq!(
+        classify_reference("image001.png"),
+        InlineReferenceKind::ContentLocation
+    );
+    assert_eq!(
+        classify_reference("Logo.PNG"),
+        InlineReferenceKind::ContentLocation
+    );
 }
 
 #[test]
@@ -404,7 +429,10 @@ fn test_classify_empty_is_other() {
 
 #[test]
 fn test_normalize_cid_key_strips_prefix_and_brackets() {
-    assert_eq!(normalize_cid_key("cid:<Image001@example.com>"), "image001@example.com");
+    assert_eq!(
+        normalize_cid_key("cid:<Image001@example.com>"),
+        "image001@example.com"
+    );
     assert_eq!(normalize_cid_key("CID:Image002@mail"), "image002@mail");
     assert_eq!(normalize_cid_key("  cid:  <FOO>  "), "foo");
 }
@@ -412,7 +440,10 @@ fn test_normalize_cid_key_strips_prefix_and_brackets() {
 #[test]
 fn test_normalize_content_location_key_lowercase() {
     assert_eq!(normalize_content_location_key("Logo.PNG"), "logo.png");
-    assert_eq!(normalize_content_location_key("  Header.JPG  "), "header.jpg");
+    assert_eq!(
+        normalize_content_location_key("  Header.JPG  "),
+        "header.jpg"
+    );
 }
 
 // --- rewrite_inline_references tests ---
@@ -422,7 +453,10 @@ fn test_rewrite_cid_reference_in_img_src() {
     let html = r#"<html><body><img src="cid:image001@mail"></body></html>"#;
     let entries = vec![plan_entry(0, "image001.png", vec!["image001@mail"], vec![])];
     let result = rewrite_inline_references(html, &entries);
-    assert!(result.contains(r#"src="image001.png""#), "cid: should be rewritten: {result}");
+    assert!(
+        result.contains(r#"src="image001.png""#),
+        "cid: should be rewritten: {result}"
+    );
     assert!(!result.contains("cid:"), "No cid: should remain: {result}");
 }
 
@@ -431,7 +465,10 @@ fn test_rewrite_content_location_in_img_src() {
     let html = r#"<html><body><img src="logo.png"></body></html>"#;
     let entries = vec![plan_entry(0, "exported_logo.png", vec![], vec!["logo.png"])];
     let result = rewrite_inline_references(html, &entries);
-    assert!(result.contains(r#"src="exported_logo.png""#), "Content-location should be rewritten: {result}");
+    assert!(
+        result.contains(r#"src="exported_logo.png""#),
+        "Content-location should be rewritten: {result}"
+    );
 }
 
 #[test]
@@ -439,7 +476,10 @@ fn test_rewrite_cid_case_insensitive() {
     let html = r#"<img src="CID:Image001@Mail">"#;
     let entries = vec![plan_entry(0, "image.png", vec!["image001@mail"], vec![])];
     let result = rewrite_inline_references(html, &entries);
-    assert!(result.contains(r#"src="image.png""#), "Case-insensitive cid matching: {result}");
+    assert!(
+        result.contains(r#"src="image.png""#),
+        "Case-insensitive cid matching: {result}"
+    );
 }
 
 #[test]
@@ -447,8 +487,14 @@ fn test_rewrite_preserves_external_urls() {
     let html = r#"<a href="https://example.com">Link</a><img src="cid:img@mail">"#;
     let entries = vec![plan_entry(0, "img.png", vec!["img@mail"], vec![])];
     let result = rewrite_inline_references(html, &entries);
-    assert!(result.contains(r#"href="https://example.com""#), "External URL unchanged: {result}");
-    assert!(result.contains(r#"src="img.png""#), "cid: should be rewritten: {result}");
+    assert!(
+        result.contains(r#"href="https://example.com""#),
+        "External URL unchanged: {result}"
+    );
+    assert!(
+        result.contains(r#"src="img.png""#),
+        "cid: should be rewritten: {result}"
+    );
 }
 
 #[test]
@@ -456,7 +502,10 @@ fn test_rewrite_preserves_mailto_links() {
     let html = r#"<a href="mailto:user@example.com">Email</a>"#;
     let entries = vec![plan_entry(0, "img.png", vec!["user@example.com"], vec![])];
     let result = rewrite_inline_references(html, &entries);
-    assert!(result.contains(r#"href="mailto:user@example.com""#), "mailto: untouched: {result}");
+    assert!(
+        result.contains(r#"href="mailto:user@example.com""#),
+        "mailto: untouched: {result}"
+    );
 }
 
 #[test]
@@ -464,7 +513,10 @@ fn test_rewrite_preserves_anchor_links() {
     let html = r##"<a href="#section1">Jump</a>"##;
     let entries = vec![plan_entry(0, "img.png", vec![], vec!["#section1"])];
     let result = rewrite_inline_references(html, &entries);
-    assert!(result.contains(r##"href="#section1""##), "Anchor link untouched: {result}");
+    assert!(
+        result.contains(r##"href="#section1""##),
+        "Anchor link untouched: {result}"
+    );
 }
 
 #[test]
@@ -482,8 +534,14 @@ fn test_rewrite_multiple_cid_references() {
         plan_entry(1, "footer.png", vec!["footer@mail"], vec![]),
     ];
     let result = rewrite_inline_references(html, &entries);
-    assert!(result.contains(r#"src="header.png""#), "Header rewritten: {result}");
-    assert!(result.contains(r#"src="footer.png""#), "Footer rewritten: {result}");
+    assert!(
+        result.contains(r#"src="header.png""#),
+        "Header rewritten: {result}"
+    );
+    assert!(
+        result.contains(r#"src="footer.png""#),
+        "Footer rewritten: {result}"
+    );
 }
 
 #[test]
@@ -491,7 +549,10 @@ fn test_rewrite_unmatched_cid_preserved() {
     let html = r#"<img src="cid:unknown@mail">"#;
     let entries = vec![plan_entry(0, "img.png", vec!["other@mail"], vec![])];
     let result = rewrite_inline_references(html, &entries);
-    assert!(result.contains("cid:unknown@mail"), "Unmatched cid: preserved: {result}");
+    assert!(
+        result.contains("cid:unknown@mail"),
+        "Unmatched cid: preserved: {result}"
+    );
 }
 
 #[test]
@@ -503,7 +564,10 @@ fn test_rewrite_ambiguous_cid_preserved() {
         plan_entry(1, "b.png", vec!["dup@mail"], vec![]),
     ];
     let result = rewrite_inline_references(html, &entries);
-    assert!(result.contains("cid:dup@mail"), "Ambiguous cid: must be preserved: {result}");
+    assert!(
+        result.contains("cid:dup@mail"),
+        "Ambiguous cid: must be preserved: {result}"
+    );
 }
 
 #[test]
@@ -511,7 +575,10 @@ fn test_rewrite_href_cid_in_anchor() {
     let html = r#"<a href="cid:doc@mail">Download</a>"#;
     let entries = vec![plan_entry(0, "document.pdf", vec!["doc@mail"], vec![])];
     let result = rewrite_inline_references(html, &entries);
-    assert!(result.contains(r#"href="document.pdf""#), "href cid: rewritten: {result}");
+    assert!(
+        result.contains(r#"href="document.pdf""#),
+        "href cid: rewritten: {result}"
+    );
 }
 
 // --- US3: Preserve Unrelated and Unresolvable Links (T021) ---
@@ -542,12 +609,27 @@ fn test_rewrite_mixed_resolvable_and_unresolvable() {
     ];
     let result = rewrite_inline_references(html, &entries);
     // Resolvable references rewritten
-    assert!(result.contains(r#"src="logo.png""#), "cid:logo rewritten: {result}");
-    assert!(result.contains(r#"src="banner_exported.png""#), "content-location rewritten: {result}");
+    assert!(
+        result.contains(r#"src="logo.png""#),
+        "cid:logo rewritten: {result}"
+    );
+    assert!(
+        result.contains(r#"src="banner_exported.png""#),
+        "content-location rewritten: {result}"
+    );
     // Unresolvable and external preserved
-    assert!(result.contains("cid:unknown@mail"), "Unknown cid: preserved: {result}");
-    assert!(result.contains("https://example.com"), "External URL preserved: {result}");
-    assert!(result.contains("mailto:help@example.com"), "mailto: preserved: {result}");
+    assert!(
+        result.contains("cid:unknown@mail"),
+        "Unknown cid: preserved: {result}"
+    );
+    assert!(
+        result.contains("https://example.com"),
+        "External URL preserved: {result}"
+    );
+    assert!(
+        result.contains("mailto:help@example.com"),
+        "mailto: preserved: {result}"
+    );
 }
 
 #[test]
@@ -559,9 +641,18 @@ fn test_rewrite_ambiguous_content_location_preserved() {
         plan_entry(1, "b.png", vec![], vec!["shared.png"]),
     ];
     let result = rewrite_inline_references(html, &entries);
-    assert!(result.contains("shared.png"), "Ambiguous content-location must be preserved: {result}");
-    assert!(!result.contains("a.png"), "Should not resolve to first: {result}");
-    assert!(!result.contains("b.png"), "Should not resolve to second: {result}");
+    assert!(
+        result.contains("shared.png"),
+        "Ambiguous content-location must be preserved: {result}"
+    );
+    assert!(
+        !result.contains("a.png"),
+        "Should not resolve to first: {result}"
+    );
+    assert!(
+        !result.contains("b.png"),
+        "Should not resolve to second: {result}"
+    );
 }
 
 #[test]
@@ -569,7 +660,10 @@ fn test_rewrite_unmatched_content_location_preserved() {
     let html = r#"<img src="missing.png">"#;
     let entries = vec![plan_entry(0, "other.png", vec![], vec!["different.png"])];
     let result = rewrite_inline_references(html, &entries);
-    assert!(result.contains("missing.png"), "Unmatched content-location preserved: {result}");
+    assert!(
+        result.contains("missing.png"),
+        "Unmatched content-location preserved: {result}"
+    );
 }
 
 #[test]
@@ -581,6 +675,12 @@ fn test_rewrite_element_with_both_src_and_href() {
         plan_entry(1, "poster.jpg", vec!["poster@mail"], vec![]),
     ];
     let result = rewrite_inline_references(html, &entries);
-    assert!(result.contains(r#"src="video.mp4""#), "src rewritten: {result}");
-    assert!(result.contains(r#"href="poster.jpg""#), "href rewritten: {result}");
+    assert!(
+        result.contains(r#"src="video.mp4""#),
+        "src rewritten: {result}"
+    );
+    assert!(
+        result.contains(r#"href="poster.jpg""#),
+        "href rewritten: {result}"
+    );
 }

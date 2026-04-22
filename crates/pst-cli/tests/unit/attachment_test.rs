@@ -115,7 +115,11 @@ fn test_attachment_clone() {
 
 // --- US2: Attachment Metadata Normalization & Filename Planning (T014) ---
 
-fn make_attachment(filename: &str, content_id: Option<&str>, content_location: Option<&str>) -> Attachment {
+fn make_attachment(
+    filename: &str,
+    content_id: Option<&str>,
+    content_location: Option<&str>,
+) -> Attachment {
     Attachment {
         filename: filename.to_string(),
         data: vec![1, 2, 3],
@@ -137,16 +141,30 @@ fn test_plan_single_attachment_basic() {
 
 #[test]
 fn test_plan_content_id_normalized_lowercase_stripped() {
-    let attachments = vec![make_attachment("img.png", Some("<Image001@example.com>"), None)];
+    let attachments = vec![make_attachment(
+        "img.png",
+        Some("<Image001@example.com>"),
+        None,
+    )];
     let plan = build_attachment_plan(&attachments);
-    assert_eq!(plan.entries[0].content_id_keys, vec!["image001@example.com"]);
+    assert_eq!(
+        plan.entries[0].content_id_keys,
+        vec!["image001@example.com"]
+    );
 }
 
 #[test]
 fn test_plan_content_id_without_angle_brackets() {
-    let attachments = vec![make_attachment("img.png", Some("image002@example.com"), None)];
+    let attachments = vec![make_attachment(
+        "img.png",
+        Some("image002@example.com"),
+        None,
+    )];
     let plan = build_attachment_plan(&attachments);
-    assert_eq!(plan.entries[0].content_id_keys, vec!["image002@example.com"]);
+    assert_eq!(
+        plan.entries[0].content_id_keys,
+        vec!["image002@example.com"]
+    );
 }
 
 #[test]
@@ -275,16 +293,20 @@ fn test_plan_mix_of_inline_and_regular_attachments() {
 fn test_rewrite_does_not_crash_on_no_match() {
     // All cid: references in HTML, but plan entries have different keys
     let html = r#"<img src="cid:a@mail"><img src="cid:b@mail">"#;
-    let entries = vec![
-        pst_cli::export::exporter::AttachmentExportPlanEntry {
-            attachment_index: 0,
-            resolved_filename: "x.png".to_string(),
-            relative_path: "x.png".to_string(),
-            content_id_keys: vec!["c@mail".to_string()],
-            content_location_keys: vec![],
-        },
-    ];
+    let entries = vec![pst_cli::export::exporter::AttachmentExportPlanEntry {
+        attachment_index: 0,
+        resolved_filename: "x.png".to_string(),
+        relative_path: "x.png".to_string(),
+        content_id_keys: vec!["c@mail".to_string()],
+        content_location_keys: vec![],
+    }];
     let result = rewrite_inline_references(html, &entries);
-    assert!(result.contains("cid:a@mail"), "Unmatched preserved: {result}");
-    assert!(result.contains("cid:b@mail"), "Unmatched preserved: {result}");
+    assert!(
+        result.contains("cid:a@mail"),
+        "Unmatched preserved: {result}"
+    );
+    assert!(
+        result.contains("cid:b@mail"),
+        "Unmatched preserved: {result}"
+    );
 }
